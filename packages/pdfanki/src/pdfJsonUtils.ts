@@ -1,14 +1,14 @@
 // lib/pdfJsonUtils.js
-import { PDFParse, VerbosityLevel } from 'pdf-parse'
+import { PDFParse, VerbosityLevel } from "pdf-parse";
 
 /** One extracted unit of PDF text: a chapter, or the whole document. */
 interface PdfSection {
-  index: number
-  title: string
-  text: string
-  pageRange?: string
-  pageCount?: number
-  processedPages?: number
+  index: number;
+  title: string;
+  text: string;
+  pageRange?: string;
+  pageCount?: number;
+  processedPages?: number;
 }
 
 /**
@@ -20,36 +20,33 @@ export async function parsePdfWithPdfParse(fileBuffer, debug = false) {
   const parser = new PDFParse({
     data: fileBuffer,
     ...(debug ? { verbosity: VerbosityLevel.WARNINGS } : {}),
-  })
+  });
 
   try {
     // Avoid parallel calls so the same buffer isn't transferred twice to the
     // pdf.js worker (Node 24 will throw a DataCloneError otherwise).
-    const textResult = await parser.getText()
-    const infoResult = await parser.getInfo()
+    const textResult = await parser.getText();
+    const infoResult = await parser.getInfo();
 
-    const pageTexts = textResult.pages?.map(page => page.text ?? '') ?? []
+    const pageTexts = textResult.pages?.map((page) => page.text ?? "") ?? [];
 
     const metadata = infoResult.metadata
-      ? ((infoResult.metadata as { _metadata?: unknown })._metadata ??
-        infoResult.metadata)
-      : {}
+      ? ((infoResult.metadata as { _metadata?: unknown })._metadata ?? infoResult.metadata)
+      : {};
 
     return {
       pageTexts,
-      rawTextContent: textResult.text || '',
+      rawTextContent: textResult.text || "",
       info: infoResult.info || {},
       metadata,
       numpages: textResult.total || infoResult.total || pageTexts.length,
       numrender: pageTexts.length,
       version:
-        (infoResult.info &&
-          (infoResult.info as { PDFFormatVersion?: string })
-            .PDFFormatVersion) ||
+        (infoResult.info && (infoResult.info as { PDFFormatVersion?: string }).PDFFormatVersion) ||
         null,
-    }
+    };
   } finally {
-    await parser.destroy()
+    await parser.destroy();
   }
 }
 
@@ -57,103 +54,90 @@ export async function parsePdfWithPdfParse(fileBuffer, debug = false) {
  * Transform pdf2json result to our expected format
  */
 export function transformPdf2jsonResult(parsedData, originalFile, index) {
-  const { pdfData, rawTextContent } = parsedData
-  const pages = pdfData.Pages || []
-  const meta = pdfData.Meta || {}
+  const { pdfData, rawTextContent } = parsedData;
+  const pages = pdfData.Pages || [];
+  const meta = pdfData.Meta || {};
 
-  let content: PdfSection[] = []
-  let processingMethod = 'pdf2json'
+  let content: PdfSection[] = [];
+  let processingMethod = "pdf2json";
 
   if (index && Array.isArray(index)) {
     // Process by chapters using the provided index
-    content = processWithIndex(pages, index)
-    processingMethod = 'pdf2json-with-index'
+    content = processWithIndex(pages, index);
+    processingMethod = "pdf2json-with-index";
   } else {
     // Process as a single text document when no index is provided.
-    content = processAsSingleText(pages, 0, pages.length - 1, originalFile.name)
-    processingMethod = 'pdf2json-single-text'
+    content = processAsSingleText(pages, 0, pages.length - 1, originalFile.name);
+    processingMethod = "pdf2json-single-text";
   }
 
   // If no structured text found, fall back to raw text content
-  if (
-    content.length === 0 &&
-    rawTextContent &&
-    rawTextContent.trim().length > 0
-  ) {
+  if (content.length === 0 && rawTextContent && rawTextContent.trim().length > 0) {
     content = [
       {
         index: 1,
-        title: originalFile.name.replace('.pdf', ''),
+        title: originalFile.name.replace(".pdf", ""),
         text: rawTextContent.trim(),
       },
-    ]
+    ];
   }
 
   // Build metadata
   const metadata = {
-    title: meta.Title || originalFile.name.replace('.pdf', ''),
-    author: meta.Author || 'Unknown Author',
+    title: meta.Title || originalFile.name.replace(".pdf", ""),
+    author: meta.Author || "Unknown Author",
     creator: meta.Creator || null,
     producer: meta.Producer || null,
     creationDate: meta.CreationDate || null,
     modificationDate: meta.ModDate || null,
-    fileType: 'pdf',
+    fileType: "pdf",
     totalPages: pages.length,
     extractedPages: index ? getTotalPagesFromIndex(index) : pages.length,
     extractedSections: content.length,
     filteredSections: 0,
-    extractedRange: index ? `Chapters 1-${index.length}` : 'All Pages',
+    extractedRange: index ? `Chapters 1-${index.length}` : "All Pages",
     processingMethod,
     pdfVersion: meta.PDFFormatVersion || null,
     hasAcroForm: meta.IsAcroFormPresent || false,
     hasXFA: meta.IsXFAPresent || false,
     hasIndex: !!index,
     indexChapters: index?.length || 0,
-  }
+  };
 
   return {
     metadata,
     content,
-  }
+  };
 }
 
 /**
  * Transform pdf-parse result to our expected format (similar to pdf2json path).
  */
 export function transformPdfParseResult(parsedData, originalFile, index) {
-  const pageTexts = parsedData.pageTexts || []
-  const totalPages = parsedData.numpages || pageTexts.length
-  const meta = parsedData.info || {}
-  const rawTextContent = parsedData.rawTextContent
+  const pageTexts = parsedData.pageTexts || [];
+  const totalPages = parsedData.numpages || pageTexts.length;
+  const meta = parsedData.info || {};
+  const rawTextContent = parsedData.rawTextContent;
 
-  let content: PdfSection[] = []
-  let processingMethod = 'pdf-parse'
+  let content: PdfSection[] = [];
+  let processingMethod = "pdf-parse";
 
   if (index && Array.isArray(index)) {
-    content = processWithIndexFromPageText(pageTexts, index)
-    processingMethod = 'pdf-parse-with-index'
+    content = processWithIndexFromPageText(pageTexts, index);
+    processingMethod = "pdf-parse-with-index";
   } else {
-    content = processAsSingleTextFromPages(
-      pageTexts,
-      0,
-      totalPages - 1,
-      originalFile.name,
-    )
-    processingMethod = 'pdf-parse-single-text'
+    content = processAsSingleTextFromPages(pageTexts, 0, totalPages - 1, originalFile.name);
+    processingMethod = "pdf-parse-single-text";
   }
 
-  if (
-    content.length === 0 &&
-    rawTextContent &&
-    rawTextContent.trim().length > 0
-  ) {
+  if (content.length === 0 && rawTextContent && rawTextContent.trim().length > 0) {
     content = [
       {
         index: 1,
-        title: originalFile.name.replace('.pdf', ''),
+        title: originalFile.name.replace(".pdf", ""),
         text: rawTextContent.trim(),
       },
-    ]
+    ];
   }
 
   const metadata = {
@@ -161,62 +145,58 @@ export function transformPdfParseResult(parsedData, originalFile, index) {
       meta.Title ||
       meta.title ||
       parsedData.metadata?.title ||
-      originalFile.name.replace('.pdf', ''),
-    author:
-      meta.Author ||
-      meta.author ||
-      parsedData.metadata?.author ||
-      'Unknown Author',
+      originalFile.name.replace(".pdf", ""),
+    author: meta.Author || meta.author || parsedData.metadata?.author || "Unknown Author",
     creator: meta.Creator || null,
     producer: meta.Producer || null,
     creationDate: meta.CreationDate || null,
     modificationDate: meta.ModDate || null,
-    fileType: 'pdf',
+    fileType: "pdf",
     totalPages: totalPages,
     extractedPages: index ? getTotalPagesFromIndex(index) : totalPages,
     extractedSections: content.length,
     filteredSections: 0,
-    extractedRange: index ? `Chapters 1-${index.length}` : 'All Pages',
+    extractedRange: index ? `Chapters 1-${index.length}` : "All Pages",
     processingMethod,
     pdfVersion: parsedData.version || null,
     hasIndex: !!index,
     indexChapters: index?.length || 0,
-  }
+  };
 
   return {
     metadata,
     content,
-  }
+  };
 }
 
 /**
  * Process PDF with chapter index
  */
 function processWithIndex(pages, index) {
-  const content: PdfSection[] = []
+  const content: PdfSection[] = [];
 
   index.forEach((chapter, chapterIndex) => {
     const title =
-      typeof chapter.title === 'string' && chapter.title.trim().length > 0
+      typeof chapter.title === "string" && chapter.title.trim().length > 0
         ? chapter.title.trim()
-        : `Section ${chapterIndex + 1}`
-    const startPage = chapter.start - 1 // Convert to 0-based index
-    const endPage = chapter.end - 1 // Convert to 0-based index
+        : `Section ${chapterIndex + 1}`;
+    const startPage = chapter.start - 1; // Convert to 0-based index
+    const endPage = chapter.end - 1; // Convert to 0-based index
 
     // Validate page range
     if (startPage < 0 || endPage >= pages.length || startPage > endPage) {
       console.warn(
         `Skipping chapter "${title}": invalid page range ${chapter.start}-${chapter.end}`,
-      )
-      return
+      );
+      return;
     }
 
     // Extract text from chapter pages
-    let chapterText = ''
+    let chapterText = "";
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
-      const pageText = extractTextFromPage(pages[pageIndex])
+      const pageText = extractTextFromPage(pages[pageIndex]);
       if (pageText && pageText.trim().length > 0) {
-        chapterText += pageText.trim() + '\n\n'
+        chapterText += pageText.trim() + "\n\n";
       }
     }
 
@@ -228,42 +208,42 @@ function processWithIndex(pages, index) {
         text: chapterText.trim(),
         pageRange: `${chapter.start}-${chapter.end}`,
         pageCount: endPage - startPage + 1,
-      })
+      });
     } else {
-      console.warn(`Chapter "${title}" has no extractable text`)
+      console.warn(`Chapter "${title}" has no extractable text`);
     }
-  })
+  });
 
-  return content
+  return content;
 }
 
 /**
  * Process PDF with chapter index using plain page text.
  */
 function processWithIndexFromPageText(pageTexts, index) {
-  const content: PdfSection[] = []
-  const totalPages = pageTexts.length
+  const content: PdfSection[] = [];
+  const totalPages = pageTexts.length;
 
   index.forEach((chapter, chapterIndex) => {
     const title =
-      typeof chapter.title === 'string' && chapter.title.trim().length > 0
+      typeof chapter.title === "string" && chapter.title.trim().length > 0
         ? chapter.title.trim()
-        : `Section ${chapterIndex + 1}`
-    const startPage = chapter.start - 1
-    const endPage = chapter.end - 1
+        : `Section ${chapterIndex + 1}`;
+    const startPage = chapter.start - 1;
+    const endPage = chapter.end - 1;
 
     if (startPage < 0 || endPage >= totalPages || startPage > endPage) {
       console.warn(
         `Skipping chapter "${title}": invalid page range ${chapter.start}-${chapter.end}`,
-      )
-      return
+      );
+      return;
     }
 
-    let chapterText = ''
+    let chapterText = "";
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
-      const pageText = pageTexts[pageIndex]
+      const pageText = pageTexts[pageIndex];
       if (pageText && pageText.trim().length > 0) {
-        chapterText += pageText.trim() + '\n\n'
+        chapterText += pageText.trim() + "\n\n";
       }
     }
 
@@ -274,86 +254,81 @@ function processWithIndexFromPageText(pageTexts, index) {
         text: chapterText.trim(),
         pageRange: `${chapter.start}-${chapter.end}`,
         pageCount: endPage - startPage + 1,
-      })
+      });
     } else {
-      console.warn(`Chapter "${title}" has no extractable text`)
+      console.warn(`Chapter "${title}" has no extractable text`);
     }
-  })
+  });
 
-  return content
+  return content;
 }
 
 /**
  * Process PDF as a single text document (new default when no index)
  */
 function processAsSingleText(filteredPages, startPage, endPage, fileName) {
-  let allText = ''
-  let processedPages = 0
+  let allText = "";
+  let processedPages = 0;
 
-  filteredPages.forEach(page => {
-    const pageText = extractTextFromPage(page)
+  filteredPages.forEach((page) => {
+    const pageText = extractTextFromPage(page);
     if (pageText && pageText.trim().length > 0) {
-      allText += pageText.trim() + '\n\n'
-      processedPages++
+      allText += pageText.trim() + "\n\n";
+      processedPages++;
     }
-  })
+  });
 
   // Only return content if we found text
   if (allText.trim().length > 0) {
-    const actualStartPage = startPage + 1
-    const actualEndPage = endPage + 1
+    const actualStartPage = startPage + 1;
+    const actualEndPage = endPage + 1;
 
     return [
       {
         index: 1,
-        title: fileName.replace('.pdf', ''),
+        title: fileName.replace(".pdf", ""),
         text: allText.trim(),
         pageRange: `${actualStartPage}-${actualEndPage}`,
         pageCount: endPage - startPage + 1,
         processedPages: processedPages,
       },
-    ]
+    ];
   }
 
-  return []
+  return [];
 }
 
 /**
  * Process PDF as a single text document from per-page text.
  */
-function processAsSingleTextFromPages(
-  filteredPages,
-  startPage,
-  endPage,
-  fileName,
-) {
-  let allText = ''
-  let processedPages = 0
+function processAsSingleTextFromPages(filteredPages, startPage, endPage, fileName) {
+  let allText = "";
+  let processedPages = 0;
 
-  filteredPages.forEach(pageText => {
+  filteredPages.forEach((pageText) => {
     if (pageText && pageText.trim().length > 0) {
-      allText += pageText.trim() + '\n\n'
-      processedPages++
+      allText += pageText.trim() + "\n\n";
+      processedPages++;
     }
-  })
+  });
 
   if (allText.trim().length > 0) {
-    const actualStartPage = startPage + 1
-    const actualEndPage = endPage + 1
+    const actualStartPage = startPage + 1;
+    const actualEndPage = endPage + 1;
 
     return [
       {
         index: 1,
-        title: fileName.replace('.pdf', ''),
+        title: fileName.replace(".pdf", ""),
         text: allText.trim(),
         pageRange: `${actualStartPage}-${actualEndPage}`,
         pageCount: endPage - startPage + 1,
         processedPages: processedPages,
       },
-    ]
+    ];
   }
 
-  return []
+  return [];
 }
 
 /**
@@ -361,8 +336,8 @@ function processAsSingleTextFromPages(
  */
 function getTotalPagesFromIndex(index) {
   return index.reduce((total, chapter) => {
-    return total + (chapter.end - chapter.start + 1)
-  }, 0)
+    return total + (chapter.end - chapter.start + 1);
+  }, 0);
 }
 
 /**
@@ -370,31 +345,31 @@ function getTotalPagesFromIndex(index) {
  */
 function extractTextFromPage(page) {
   if (!page.Texts || !Array.isArray(page.Texts)) {
-    return ''
+    return "";
   }
 
-  let pageText = ''
+  let pageText = "";
 
   // Sort texts by Y position (top to bottom), then X position (left to right)
-  const sortedTexts = page.Texts.slice().sort((a, b) => {
+  const sortedTexts = page.Texts.toSorted((a, b) => {
     if (Math.abs(a.y - b.y) < 0.1) {
       // Same line
-      return a.x - b.x // Sort by X position
+      return a.x - b.x; // Sort by X position
     }
-    return a.y - b.y // Sort by Y position
-  })
+    return a.y - b.y; // Sort by Y position
+  });
 
-  sortedTexts.forEach(textObj => {
+  sortedTexts.forEach((textObj) => {
     if (textObj.R && Array.isArray(textObj.R)) {
-      textObj.R.forEach(run => {
+      textObj.R.forEach((run) => {
         if (run.T) {
           // Decode URI-encoded text
-          const decodedText = decodeURIComponent(run.T)
-          pageText += decodedText + ' '
+          const decodedText = decodeURIComponent(run.T);
+          pageText += decodedText + " ";
         }
-      })
+      });
     }
-  })
+  });
 
-  return pageText
+  return pageText;
 }

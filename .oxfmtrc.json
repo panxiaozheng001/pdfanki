@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": true,
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "coverage/",
+    ".turbo/",
+    ".tmp/",
+    "pnpm-lock.yaml",
+
+    // Sample corpora and book extracts are compared or parsed verbatim, so a
+    // formatter rewriting them changes what the tests read rather than how it
+    // looks. The last three are gitignored working directories.
+    "fixtures/",
+    "tests/books/",
+    "test/",
+    "docs/"
+  ]
+}

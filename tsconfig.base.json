@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020"],
+    // Node 24 is the floor, which is well past this. ES2023 is what the code
+    // actually reaches for, `Array#toSorted` being the first of them. Raising it
+    // from ES2020 changed no emitted byte.
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowJs": false,

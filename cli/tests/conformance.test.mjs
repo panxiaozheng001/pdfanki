@@ -1,12 +1,12 @@
-import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
-import test from 'node:test'
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import test from "node:test";
 
-import { renderCard } from '@ankimd/core'
+import { renderCard } from "@ankimd/core";
 
-import { parseSectionCards } from '../dist/flashcardPolicy.js'
+import { parseSectionCards } from "../dist/flashcardPolicy.js";
 
 /*
  * The Flashcard Markdown conformance corpus, run in the **producer** direction.
@@ -24,59 +24,54 @@ import { parseSectionCards } from '../dist/flashcardPolicy.js'
  * tests use whole files, which is what "a producer rejects it" means.
  */
 
-const require = createRequire(import.meta.url)
-const FIXTURES = path.dirname(
-  require.resolve('flashcard-md-spec/manifest.json'),
-)
+const require = createRequire(import.meta.url);
+const FIXTURES = path.dirname(require.resolve("flashcard-md-spec/manifest.json"));
 
 /** The spec version this suite conforms to, pinned rather than tracked. */
-const SPEC_VERSION = '1.0'
+const SPEC_VERSION = "1.0";
 
-const manifest = JSON.parse(
-  readFileSync(path.join(FIXTURES, 'manifest.json'), 'utf8'),
-)
+const manifest = JSON.parse(readFileSync(path.join(FIXTURES, "manifest.json"), "utf8"));
 
-const input = id => readFileSync(path.join(FIXTURES, id, 'input.md'), 'utf8')
+const input = (id) => readFileSync(path.join(FIXTURES, id, "input.md"), "utf8");
 
-const casesIn = tier => manifest.cases.filter(entry => entry.tier === tier)
+const casesIn = (tier) => manifest.cases.filter((entry) => entry.tier === tier);
 
 /** Everything from the first card heading on: the region pdfanki's output covers. */
-const cardRegion = markdown => {
-  const lines = markdown.split('\n')
-  const first = lines.findIndex(line => line.startsWith('## '))
-  assert.notEqual(first, -1, 'fixture has no card heading')
-  return lines.slice(first).join('\n').trim()
-}
+const cardRegion = (markdown) => {
+  const lines = markdown.split("\n");
+  const first = lines.findIndex((line) => line.startsWith("## "));
+  assert.notEqual(first, -1, "fixture has no card heading");
+  return lines.slice(first).join("\n").trim();
+};
 
 /** What pdfanki would write for these cards, which is always canonical form. */
-const written = markdown =>
-  parseSectionCards(markdown).map(renderCard).join('\n\n')
+const written = (markdown) => parseSectionCards(markdown).map(renderCard).join("\n\n");
 
-const rejects = markdown => {
+const rejects = (markdown) => {
   try {
-    parseSectionCards(markdown)
+    parseSectionCards(markdown);
   } catch (error) {
-    return error.message
+    return error.message;
   }
-  return null
-}
+  return null;
+};
 
-test('the suite pins a spec version rather than tracking what is installed', () => {
-  assert.equal(manifest.specVersion, SPEC_VERSION)
-})
+test("the suite pins a spec version rather than tracking what is installed", () => {
+  assert.equal(manifest.specVersion, SPEC_VERSION);
+});
 
-test('the corpus has cases in every tier', () => {
-  for (const tier of ['canonical', 'valid', 'invalid']) {
-    assert.ok(casesIn(tier).length > 0, `no ${tier} cases`)
+test("the corpus has cases in every tier", () => {
+  for (const tier of ["canonical", "valid", "invalid"]) {
+    assert.ok(casesIn(tier).length > 0, `no ${tier} cases`);
   }
-})
+});
 
-for (const entry of casesIn('canonical')) {
+for (const entry of casesIn("canonical")) {
   test(`${entry.id} round-trips byte for byte: ${entry.description}`, () => {
-    const region = cardRegion(input(entry.id))
+    const region = cardRegion(input(entry.id));
 
-    assert.equal(written(region), region)
-  })
+    assert.equal(written(region), region);
+  });
 }
 
 /*
@@ -86,17 +81,12 @@ for (const entry of casesIn('canonical')) {
  * brought, never for one a model wrote. So it is excluded here by name and with a
  * reason, rather than by an assertion weak enough to hold for it.
  */
-const NOT_IN_THE_TEXT = new Set(['invalid/unresolved-image'])
+const NOT_IN_THE_TEXT = new Set(["invalid/unresolved-image"]);
 
-for (const entry of casesIn('invalid').filter(
-  one => !NOT_IN_THE_TEXT.has(one.id),
-)) {
+for (const entry of casesIn("invalid").filter((one) => !NOT_IN_THE_TEXT.has(one.id))) {
   test(`${entry.id} is rejected: ${entry.description}`, () => {
-    assert.ok(
-      rejects(input(entry.id)),
-      'expected the producer to reject this file',
-    )
-  })
+    assert.ok(rejects(input(entry.id)), "expected the producer to reject this file");
+  });
 }
 
 /*
@@ -108,30 +98,30 @@ for (const entry of casesIn('invalid').filter(
  * the model again for a difference it does not control.
  */
 
-test('valid/card-with-no-body is refused rather than emitted', () => {
-  const message = rejects(cardRegion(input('valid/card-with-no-body')))
+test("valid/card-with-no-body is refused rather than emitted", () => {
+  const message = rejects(cardRegion(input("valid/card-with-no-body")));
 
-  assert.match(message ?? '', /is missing bullet items/)
-})
+  assert.match(message ?? "", /is missing bullet items/);
+});
 
-test('valid/duplicate-fronts is refused rather than emitted', () => {
-  const message = rejects(cardRegion(input('valid/duplicate-fronts')))
+test("valid/duplicate-fronts is refused rather than emitted", () => {
+  const message = rejects(cardRegion(input("valid/duplicate-fronts")));
 
-  assert.match(message ?? '', /Duplicate card front/)
-})
+  assert.match(message ?? "", /Duplicate card front/);
+});
 
-test('valid/no-blank-line-after-heading comes back out canonical', () => {
-  const region = cardRegion(input('valid/no-blank-line-after-heading'))
-  const output = written(region)
+test("valid/no-blank-line-after-heading comes back out canonical", () => {
+  const region = cardRegion(input("valid/no-blank-line-after-heading"));
+  const output = written(region);
 
-  assert.notEqual(output, region)
-  assert.equal(output, region.replace(/^(## .*)$/gm, '$1\n'))
-})
+  assert.notEqual(output, region);
+  assert.equal(output, region.replace(/^(## .*)$/gm, "$1\n"));
+});
 
-test('valid/no-blank-lines-around-separator comes back out canonical', () => {
-  const region = cardRegion(input('valid/no-blank-lines-around-separator'))
-  const output = written(region)
+test("valid/no-blank-lines-around-separator comes back out canonical", () => {
+  const region = cardRegion(input("valid/no-blank-lines-around-separator"));
+  const output = written(region);
 
-  assert.notEqual(output, region)
-  assert.match(output, /\n\n\*\*\*\n\n/)
-})
+  assert.notEqual(output, region);
+  assert.match(output, /\n\n\*\*\*\n\n/);
+});

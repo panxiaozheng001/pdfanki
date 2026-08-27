@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -70,17 +70,17 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - name: '@shbernal/pdfanki'
+          - name: "@shbernal/pdfanki"
             directory: packages/pdfanki
-          - name: '@shbernal/pdfanki-cli'
+          - name: "@shbernal/pdfanki-cli"
             directory: cli
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org

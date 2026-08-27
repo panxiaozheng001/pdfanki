@@ -1,25 +1,31 @@
 {
   "name": "@shbernal/pdfanki",
   "version": "0.5.0",
-  "type": "module",
   "description": "Create Anki decks from PDF and EPUB files using NLP with LLMs.",
   "keywords": [
     "anki",
-    "pdf",
-    "epub",
-    "llm",
     "cli",
+    "epub",
     "flashcards",
+    "llm",
     "markdown",
-    "nlp"
+    "nlp",
+    "pdf"
   ],
-  "author": "shbernal <shbernal.01@gmail.com>",
-  "license": "MIT",
   "homepage": "https://github.com/shbernal/pdfanki",
+  "license": "MIT",
+  "author": "shbernal <shbernal.01@gmail.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/shbernal/pdfanki.git"
   },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -36,25 +42,15 @@
       "import": "./dist/server.js"
     }
   },
-  "files": [
-    "dist",
-    "src",
-    "LICENSE",
-    "README.md"
-  ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "clean": "node -e \"const fs=require('fs');['dist','node_modules','tsconfig.tsbuildinfo'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "build": "tsc -b tsconfig.json",
-    "lint": "eslint src --max-warnings 0",
     "test": "node --test tests/*.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" tests/*.test.mjs",
     "typecheck": "tsc --noEmit"
-  },
-  "engines": {
-    "node": ">=24"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -62,5 +58,8 @@
     "epub": "^2.1.1",
     "openai": "^7.1.0",
     "pdf-parse": "^2.4.5"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

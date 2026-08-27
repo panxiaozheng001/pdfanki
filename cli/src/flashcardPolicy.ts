@@ -5,7 +5,7 @@ import {
   parseMarkdown,
   scanLines,
   splitSourceLines,
-} from '@ankimd/core'
+} from "@ankimd/core";
 
 /*
  * pdfanki's producer policy over one model response.
@@ -27,13 +27,13 @@ import {
  */
 
 /** A body line that opens a top-level list item, which is what the prompt asks for. */
-const TOP_LEVEL_BULLET = /^[-*+][ \t]+\S/
-const EMPTY_BULLET = /^[-*+][ \t]*$/
+const TOP_LEVEL_BULLET = /^[-*+][ \t]+\S/;
+const EMPTY_BULLET = /^[-*+][ \t]*$/;
 
 const hasBullet = (body: string): boolean =>
   scanLines(splitSourceLines(body)).some(
-    line => !line.inCode && TOP_LEVEL_BULLET.test(line.text),
-  )
+    (line) => !line.inCode && TOP_LEVEL_BULLET.test(line.text),
+  );
 
 /**
  * Every empty list item in the response, by absolute line.
@@ -43,10 +43,10 @@ const hasBullet = (body: string): boolean =>
  */
 const emptyBullets = (markdown: string): CanonicalIssue[] =>
   scanLines(splitSourceLines(markdown))
-    .filter(line => !line.inCode && EMPTY_BULLET.test(line.text))
-    .map(line => ({ message: 'Empty bullet item', lines: [line.number] }))
+    .filter((line) => !line.inCode && EMPTY_BULLET.test(line.text))
+    .map((line) => ({ message: "Empty bullet item", lines: [line.number] }));
 
-const label = (card: Card): string => card.headingText || '(empty front)'
+const label = (card: Card): string => card.headingText || "(empty front)";
 
 /**
  * §5.4 makes a bullet-list back an authoring convention rather than a grammar rule, so
@@ -55,11 +55,11 @@ const label = (card: Card): string => card.headingText || '(empty front)'
  */
 const missingBullets = (cards: readonly Card[]): CanonicalIssue[] =>
   cards
-    .filter(card => !hasBullet(card.frontBody) && !hasBullet(card.back))
-    .map(card => ({
+    .filter((card) => !hasBullet(card.frontBody) && !hasBullet(card.back))
+    .map((card) => ({
       message: `Card "${label(card)}" is missing bullet items`,
       lines: [],
-    }))
+    }));
 
 /**
  * §5.5 makes duplicate fronts valid, and a consumer must keep both. A producer may
@@ -67,21 +67,21 @@ const missingBullets = (cards: readonly Card[]): CanonicalIssue[] =>
  * model repeating itself, and the user cannot tell them apart while reviewing.
  */
 const duplicateFronts = (cards: readonly Card[]): CanonicalIssue[] => {
-  const seen = new Set<string>()
+  const seen = new Set<string>();
 
   return cards
-    .filter(card => {
-      const front = card.headingText
-      if (!front) return false
-      if (seen.has(front)) return true
-      seen.add(front)
-      return false
+    .filter((card) => {
+      const front = card.headingText;
+      if (!front) return false;
+      if (seen.has(front)) return true;
+      seen.add(front);
+      return false;
     })
-    .map(card => ({
+    .map((card) => ({
       message: `Duplicate card front "${card.headingText}"`,
       lines: [],
-    }))
-}
+    }));
+};
 
 /**
  * Reads one model response into cards, or throws with everything wrong with it.
@@ -90,39 +90,39 @@ const duplicateFronts = (cards: readonly Card[]): CanonicalIssue[] => {
  * title are written by the CLI, around this.
  */
 export function parseSectionCards(markdown: string): Card[] {
-  const { deck, diagnostics } = parseMarkdown(markdown)
-  const cards = [...deck.cards]
+  const { deck, diagnostics } = parseMarkdown(markdown);
+  const cards = [...deck.cards];
 
   const issues: CanonicalIssue[] = [
-    ...diagnostics.map(item => ({
+    ...diagnostics.map((item) => ({
       message: `${item.code}: ${item.message}`,
       lines: [],
     })),
     ...missingBullets(cards),
     ...emptyBullets(markdown),
     ...duplicateFronts(cards),
-  ]
+  ];
 
   /* §4.3 makes a preamble legal and gives it to no card, so whatever reads the deck
      drops it. The CLI writes what belongs above the first card, and anything the model
      puts there is content it meant for a card and would silently lose. */
   if (deck.preamble !== null) {
     issues.push({
-      message: 'Content found before the first card front',
+      message: "Content found before the first card front",
       lines: [],
-    })
+    });
   }
 
   if (cards.length === 0) {
     issues.push({
       message: 'No flashcards detected (expected lines starting with "## ")',
       lines: [],
-    })
+    });
   }
 
   if (issues.length > 0) {
-    throw new Error(`Markdown validation failed:\n${formatIssues(issues)}`)
+    throw new Error(`Markdown validation failed:\n${formatIssues(issues)}`);
   }
 
-  return cards
+  return cards;
 }

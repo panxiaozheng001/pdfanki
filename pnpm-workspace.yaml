@@ -4,12 +4,12 @@ packages:
 
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
-  - '@ankimd/*'
-  - '@shbernal/*'
+  - "@ankimd/*"
+  - "@shbernal/*"
   - flashcard-md-spec@1.0.0
 
 allowBuilds:
-  '@google/genai': true
+  "@google/genai": true
   esbuild: true
   lefthook: true
   protobufjs: true

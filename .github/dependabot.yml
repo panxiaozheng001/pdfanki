@@ -31,11 +31,7 @@ updates:
     ignore:
       # Sibling packages are released deliberately and in order; bumping them
       # here would race the coordinated release described in AGENTS.md.
-      - dependency-name: '@shbernal/*'
-      # typescript-eslint 8.x rejects the TS 7.0 API; see AGENTS.md.
-      - dependency-name: typescript
-        update-types:
-          - version-update:semver-major
+      - dependency-name: "@shbernal/*"
 
   - package-ecosystem: github-actions
     directory: /
@@ -45,4 +41,4 @@ updates:
     groups:
       actions:
         patterns:
-          - '*'
+          - "*"
