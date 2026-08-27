@@ -53,10 +53,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
-    "@google/genai": "^2.13.0",
+    "@anthropic-ai/sdk": "^0.121.0",
+    "@google/genai": "^2.19.0",
     "epub": "^2.1.1",
-    "openai": "^7.1.0",
+    "openai": "^7.5.0",
     "pdf-parse": "^2.4.5"
   },
   "engines": {
