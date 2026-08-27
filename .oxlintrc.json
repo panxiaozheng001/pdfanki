@@ -83,5 +83,16 @@
     // The default export of `epub` is the `EPub` class; the package also names
     // it. Importing it under any other name would describe it worse.
     "import/no-named-as-default": "off"
-  }
+  },
+  "overrides": [
+    {
+      // `node:test`'s `test()` returns a promise the runner owns and settles;
+      // a suite that awaited its own cases would serialize them and report
+      // nothing extra. Every call here is a registration, not a pending result.
+      "files": ["**/tests/**"],
+      "rules": {
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ]
 }

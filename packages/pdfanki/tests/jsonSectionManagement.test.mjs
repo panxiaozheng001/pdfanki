@@ -128,9 +128,9 @@ test("removeFromUndoStack drops the most recent entry", () => {
 
 test("canUndo reflects whether the stack holds anything", () => {
   assert.equal(canUndo(["a"]), true);
-  assert.equal(Boolean(canUndo([])), false);
-  assert.equal(Boolean(canUndo(null)), false);
-  assert.equal(Boolean(canUndo(undefined)), false);
+  assert.equal(canUndo([]), false);
+  assert.equal(canUndo(null), false);
+  assert.equal(canUndo(undefined), false);
 });
 
 test("validateJsonStructure accepts a well-formed book", () => {

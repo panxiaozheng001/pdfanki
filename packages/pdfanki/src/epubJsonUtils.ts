@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // lib/epubJsonUtils.js
-import EPub from "epub";
+import EPub, { type Metadata } from "epub";
 
-import { DEFAULT_EPUB_TITLE_FILTERS } from "./epubFilters.js";
+import { DEFAULT_EPUB_TITLE_FILTERS, type EpubTitleFilter } from "./epubFilters.js";
+import type { BookJson } from "./types/flashcards.js";
 
 /** A chapter as pulled out of the EPUB, before content filtering. */
 interface ExtractedChapter {
@@ -37,6 +38,38 @@ interface TitleMatcher {
   test: (titleLower: string) => boolean;
 }
 
+/** The half-open chapter selection a `--start-section`/`--end-section` pair names. */
+interface ChapterRange {
+  startIdx: number;
+  endIdx: number;
+}
+
+/** What `parseEpubWithEpubLib` hands `transformEpubResult`. */
+export interface EpubParseResult {
+  metadata: Metadata;
+  chapters: ExtractedChapter[];
+  totalChapters: number;
+}
+
+/** The name of the file a transform is describing. */
+interface SourceFile {
+  name: string;
+}
+
+/** What was thrown, said in one line. `catch` hands over `unknown`, not an `Error`. */
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return typeof error === "string" ? error : "unknown error";
+}
+
+/** A chapter title as the EPUB spells it, or a generated stand-in. */
+function chapterTitleOf(title: unknown, chapterNumber: number): string {
+  return typeof title === "string" && title.trim().length > 0 ? title : `Section ${chapterNumber}`;
+}
+
 const ANSI_BRIGHT_BLUE = "\u001b[94m";
 const ANSI_BRIGHT_GREEN = "\u001b[92m";
 const ANSI_BRIGHT_RED = "\u001b[91m";
@@ -44,7 +77,7 @@ const ANSI_BRIGHT_YELLOW = "\u001b[93m";
 const ANSI_UNDERLINE = "\u001b[4m";
 const ANSI_RESET = "\u001b[0m";
 
-function canUseColor() {
+function canUseColor(): boolean {
   return process.stdout.isTTY && process.env.NO_COLOR !== "1";
 }
 
@@ -55,7 +88,7 @@ function styleText(
     color?: "blue" | "green" | "red" | "yellow";
     underline?: boolean;
   } = {},
-) {
+): string {
   const useColor = options.useColor === true;
   const color = options.color;
   const underline = options.underline === true;
@@ -91,12 +124,16 @@ function formatChapterLabel(chapterNumber: number, totalChapters: number): strin
   return `${String(chapterNumber).padStart(width, " ")}.`;
 }
 
-function parseSectionSelectionValue(value, label: string): number | undefined {
+function parseSectionSelectionValue(value: unknown, label: string): number | undefined {
   if (typeof value === "undefined" || value === null) {
     return undefined;
   }
 
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  if (typeof value !== "number" && typeof value !== "string") {
+    throw new Error(`${label} must be an integer`);
+  }
+
+  const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
   if (!Number.isInteger(parsed)) {
     throw new Error(`${label} must be an integer`);
   }
@@ -104,7 +141,11 @@ function parseSectionSelectionValue(value, label: string): number | undefined {
   return parsed;
 }
 
-function resolveChapterRange(totalChapters: number, startChapter?, endChapter?) {
+function resolveChapterRange(
+  totalChapters: number,
+  startChapter?: unknown,
+  endChapter?: unknown,
+): ChapterRange {
   const parsedStart = parseSectionSelectionValue(startChapter, "Start section");
   const parsedEnd = parseSectionSelectionValue(endChapter, "End section");
   const startIdx = (parsedStart ?? 1) - 1;
@@ -138,16 +179,16 @@ function getChapterRangeReason(
  * Parse EPUB using epub library and return a promise
  */
 export function parseEpubWithEpubLib(
-  fileBuffer,
-  fileName,
-  titleFilters = DEFAULT_EPUB_TITLE_FILTERS,
-  minChars?,
+  fileBuffer: Buffer | Uint8Array,
+  fileName: string,
+  titleFilters: readonly EpubTitleFilter[] = DEFAULT_EPUB_TITLE_FILTERS,
+  minChars?: number,
   preview = false,
   previewChars = 120,
   excludedChapters?: ReadonlySet<number>,
-  startChapter?,
-  endChapter?,
-) {
+  startChapter?: unknown,
+  endChapter?: unknown,
+): Promise<EpubParseResult> {
   return (async () => {
     // Create a temporary file since epub library expects a file path
     const tempFilePath = join(tmpdir(), `temp_epub_${Date.now()}_${fileName}`);
@@ -190,7 +231,7 @@ export function parseEpubWithEpubLib(
       for (let i = 0; i < chapters.length; i++) {
         const chapter = chapters[i];
         const chapterNumber = i + 1;
-        const chapterTitle = chapter.title || `Section ${chapterNumber}`;
+        const chapterTitle = chapterTitleOf(chapter?.title, chapterNumber);
         const styledChapterTitle = styleText(chapterTitle, {
           useColor,
           color: "blue",
@@ -272,14 +313,15 @@ export function parseEpubWithEpubLib(
             }
           }
         } catch (chapterError) {
-          console.warn(`Failed to extract chapter "${chapterTitle}": ${chapterError.message}`);
+          const reason = describeError(chapterError);
+          console.warn(`Failed to extract chapter "${chapterTitle}": ${reason}`);
           // Add empty chapter to maintain index consistency
           extractedChapters.push({
             index: chapterNumber,
             title: chapterTitle,
             text: "",
             originalIndex: chapterNumber,
-            error: chapterError.message,
+            error: reason,
           });
         }
       }
@@ -290,7 +332,7 @@ export function parseEpubWithEpubLib(
         totalChapters: totalChapters,
       };
     } catch (error) {
-      throw new Error(`Failed to parse EPUB: ${(error as Error).message}`, { cause: error });
+      throw new Error(`Failed to parse EPUB: ${describeError(error)}`, { cause: error });
     } finally {
       try {
         unlinkSync(tempFilePath);
@@ -305,14 +347,14 @@ export function parseEpubWithEpubLib(
  * Transform EPUB result to match PDF output format
  */
 export function transformEpubResult(
-  epubData,
-  originalFile,
-  startChapter,
-  endChapter,
-  titleFilters = DEFAULT_EPUB_TITLE_FILTERS,
-  minChars?,
+  epubData: EpubParseResult,
+  originalFile: SourceFile,
+  startChapter?: unknown,
+  endChapter?: unknown,
+  titleFilters: readonly EpubTitleFilter[] = DEFAULT_EPUB_TITLE_FILTERS,
+  minChars?: number,
   excludedChapters?: ReadonlySet<number>,
-) {
+): BookJson {
   const { metadata, chapters, totalChapters } = epubData;
   const selectedRange = resolveChapterRange(totalChapters, startChapter, endChapter);
 
@@ -377,7 +419,9 @@ export function transformEpubResult(
     publisher: metadata.publisher || "Unknown Publisher",
     date: metadata.date || "Unknown Date",
     language: metadata.language || "Unknown Language",
-    isbn: metadata.ISBN || null,
+    // `ISBN` is not one of the OPF fields the epub library types, so it arrives
+    // through that interface's index signature as `unknown`.
+    isbn: typeof metadata.ISBN === "string" ? metadata.ISBN : null,
     fileType: "epub",
     totalPages: totalChapters, // For EPUB, chapters are equivalent to "pages"
     extractedPages: selectedRange.endIdx - selectedRange.startIdx + 1,
@@ -398,7 +442,7 @@ export function transformEpubResult(
 /**
  * Helper function to get chapter text (promisified)
  */
-function getChapterText(epub, chapterId) {
+function getChapterText(epub: EPub, chapterId: string): Promise<string> {
   return epub.getChapter(chapterId);
 }
 
@@ -421,7 +465,7 @@ function buildPreviewText(text: string, previewChars: number): string {
 /**
  * Helper function to clean HTML and extract plain text
  */
-function cleanHtmlText(htmlContent) {
+function cleanHtmlText(htmlContent: string): string {
   if (!htmlContent) return "";
 
   // Remove HTML tags and decode entities
@@ -444,7 +488,7 @@ function cleanHtmlText(htmlContent) {
 /**
  * Function to check if content should be filtered out
  */
-function buildTitleMatchers(filters) {
+function buildTitleMatchers(filters: readonly EpubTitleFilter[] | undefined): TitleMatcher[] {
   const rules = filters ?? [];
   const matchers: TitleMatcher[] = [];
 
@@ -467,7 +511,7 @@ function buildTitleMatchers(filters) {
         });
       } catch (error) {
         console.warn(
-          `Skipping invalid EPUB title filter regex "${rule.pattern}": ${(error as Error).message}`,
+          `Skipping invalid EPUB title filter regex "${rule.pattern}": ${describeError(error)}`,
         );
       }
     }
@@ -494,14 +538,14 @@ function getSelectionFilterReason(
 }
 
 function shouldFilterContent(
-  chapterNumber,
-  title,
-  text,
-  titleMatchers,
-  minChars?,
-  selectedRange?,
+  chapterNumber: number,
+  title: string | undefined,
+  text: string | undefined,
+  titleMatchers: readonly TitleMatcher[],
+  minChars?: number,
+  selectedRange?: ChapterRange,
   excludedChapters?: ReadonlySet<number>,
-) {
+): { shouldFilter: boolean; reason?: string } {
   if (!selectedRange) {
     throw new Error("selectedRange is required for EPUB filtering");
   }

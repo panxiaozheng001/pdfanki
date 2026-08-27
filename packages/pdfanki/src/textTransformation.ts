@@ -1,9 +1,12 @@
+import type { BookJson, ContentSection } from "./types/flashcards.js";
+
 /**
- * Clean and normalize text content extracted from PDFs
- * @param {string} text - Raw text content to clean
- * @returns {string} - Cleaned text content
+ * Clean and normalize text content extracted from PDFs. Takes `unknown` because
+ * the sections it runs over come out of PDF and EPUB parsers that promise
+ * nothing about a section's `text`; anything that is not a string is an empty
+ * one as far as this is concerned.
  */
-export function cleanExtractedText(text) {
+export function cleanExtractedText(text: unknown): string {
   if (!text || typeof text !== "string") {
     return "";
   }
@@ -31,12 +34,12 @@ export function cleanExtractedText(text) {
   return cleanedText;
 }
 
-/**
- * Apply text cleaning to all content sections in a transformed result
- * @param {Object} transformedResult - The result from transformPdf2jsonResult
- * @returns {Object} - Transformed result with cleaned text content
- */
-export function cleanTransformedResult(transformedResult) {
+/** Apply text cleaning to every content section in a transformed result. */
+export function cleanTransformedResult(transformedResult: BookJson): BookJson;
+export function cleanTransformedResult<T extends null | undefined>(transformedResult: T): T;
+export function cleanTransformedResult(
+  transformedResult: BookJson | null | undefined,
+): BookJson | null | undefined {
   if (!transformedResult?.content) {
     return transformedResult;
   }
@@ -44,7 +47,7 @@ export function cleanTransformedResult(transformedResult) {
   // Create a copy to avoid mutating the original
   const cleanedResult = {
     ...transformedResult,
-    content: transformedResult.content.map((section) => ({
+    content: transformedResult.content.map((section: ContentSection) => ({
       ...section,
       text: cleanExtractedText(section.text),
     })),

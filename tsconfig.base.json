@@ -12,8 +12,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "strict": false,
-    "strictNullChecks": true,
+    "strict": true,
     "types": ["node"]
   }
 }

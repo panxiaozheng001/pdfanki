@@ -1,9 +1,11 @@
 // utils/jsonSectionManagement.js
 
+import type { BookJson, BookMetadata, ContentSection, DeletedSection } from "./types/flashcards.js";
+
 /**
  * Re-index sections to maintain sequential numbering (1, 2, 3...)
  */
-export function reindexSections(sections) {
+export function reindexSections(sections: ContentSection[]): ContentSection[] {
   return sections.map((section, index) => ({
     ...section,
     index: index + 1,
@@ -13,7 +15,7 @@ export function reindexSections(sections) {
 /**
  * Update metadata after sections are modified
  */
-export function updateMetadata(jsonData, deletedCount = 0) {
+export function updateMetadata(jsonData: BookJson, deletedCount = 0): BookMetadata {
   const currentSectionCount = jsonData.content?.length || 0;
 
   return {
@@ -26,7 +28,10 @@ export function updateMetadata(jsonData, deletedCount = 0) {
 /**
  * Delete a section from JSON data
  */
-export function deleteSection(jsonData, sectionIndex) {
+export function deleteSection(
+  jsonData: BookJson,
+  sectionIndex: number,
+): { updatedJsonData: BookJson; deletedSection: DeletedSection } {
   if (!jsonData?.content || !Array.isArray(jsonData.content)) {
     throw new Error("Invalid JSON data structure");
   }
@@ -72,7 +77,7 @@ export function deleteSection(jsonData, sectionIndex) {
 /**
  * Restore a deleted section to its original position
  */
-export function undoDelete(jsonData, deletedSection) {
+export function undoDelete(jsonData: BookJson, deletedSection: DeletedSection): BookJson {
   if (!jsonData?.content || !Array.isArray(jsonData.content)) {
     throw new Error("Invalid JSON data structure");
   }
@@ -107,7 +112,9 @@ export function undoDelete(jsonData, deletedSection) {
 /**
  * Get the most recent deleted section from the undo stack
  */
-export function getLastDeleted(deletedSections) {
+export function getLastDeleted(
+  deletedSections: DeletedSection[] | null | undefined,
+): DeletedSection | null {
   if (!deletedSections || deletedSections.length === 0) {
     return null;
   }
@@ -119,7 +126,11 @@ export function getLastDeleted(deletedSections) {
 /**
  * Add a deleted section to the undo stack
  */
-export function addToUndoStack(deletedSections, deletedSection, maxUndoCount = 10) {
+export function addToUndoStack(
+  deletedSections: DeletedSection[],
+  deletedSection: DeletedSection,
+  maxUndoCount = 10,
+): DeletedSection[] {
   const newStack = [...deletedSections, deletedSection];
 
   // Limit the undo stack size
@@ -133,7 +144,9 @@ export function addToUndoStack(deletedSections, deletedSection, maxUndoCount = 1
 /**
  * Remove the most recent deleted section from the undo stack
  */
-export function removeFromUndoStack(deletedSections) {
+export function removeFromUndoStack(
+  deletedSections: DeletedSection[] | null | undefined,
+): DeletedSection[] {
   if (!deletedSections || deletedSections.length === 0) {
     return [];
   }
@@ -144,30 +157,34 @@ export function removeFromUndoStack(deletedSections) {
 /**
  * Clear all deleted sections from the undo stack
  */
-export function clearUndoStack() {
+export function clearUndoStack(): DeletedSection[] {
   return [];
 }
 
 /**
  * Check if undo is available
  */
-export function canUndo(deletedSections) {
-  return deletedSections && deletedSections.length > 0;
+export function canUndo(deletedSections: DeletedSection[] | null | undefined): boolean {
+  return (deletedSections?.length ?? 0) > 0;
 }
 
 /**
  * Get summary of what can be undone
  */
-export function getUndoSummary(deletedSections) {
-  if (!canUndo(deletedSections)) {
+export function getUndoSummary(deletedSections: DeletedSection[] | null | undefined): {
+  sectionTitle: string | undefined;
+  timestamp: number;
+  count: number;
+} | null {
+  const lastDeleted = getLastDeleted(deletedSections);
+  if (!lastDeleted) {
     return null;
   }
 
-  const lastDeleted = getLastDeleted(deletedSections);
   return {
     sectionTitle: lastDeleted.section.title,
     timestamp: lastDeleted.timestamp,
-    count: deletedSections.length,
+    count: deletedSections?.length ?? 0,
   };
 }
 
@@ -175,38 +192,55 @@ export function getUndoSummary(deletedSections) {
  * Validate JSON data structure
  */
 export function validateJsonStructure(
-  jsonData,
+  jsonData: unknown,
   options: { requireMetadata?: boolean; requireTitles?: boolean } = {},
-) {
+): { isValid: boolean; error?: string } {
   const { requireMetadata = true, requireTitles = true } = options;
 
-  if (!jsonData) {
-    return { isValid: false, error: "JSON data is null or undefined" };
+  if (!jsonData || typeof jsonData !== "object") {
+    return {
+      isValid: false,
+      error: jsonData ? "JSON data must have a content array" : "JSON data is null or undefined",
+    };
   }
 
-  if (!jsonData.content || !Array.isArray(jsonData.content)) {
+  const content: unknown = "content" in jsonData ? jsonData.content : undefined;
+  const metadata: unknown = "metadata" in jsonData ? jsonData.metadata : undefined;
+
+  if (!Array.isArray(content)) {
     return { isValid: false, error: "JSON data must have a content array" };
   }
 
   if (requireMetadata) {
-    if (!jsonData.metadata || typeof jsonData.metadata !== "object") {
+    if (!metadata || typeof metadata !== "object") {
       return { isValid: false, error: "JSON data must have a metadata object" };
     }
-  } else if (jsonData.metadata && typeof jsonData.metadata !== "object") {
+  } else if (metadata && typeof metadata !== "object") {
     return { isValid: false, error: "metadata must be an object if present" };
   }
 
+  const sections: unknown[] = content;
+
   // Check if content sections have required properties
-  for (let i = 0; i < jsonData.content.length; i++) {
-    const section = jsonData.content[i];
-    const hasTitle = section.title && typeof section.title === "string";
+  for (const [position, section] of sections.entries()) {
+    const missing = {
+      isValid: false,
+      error: `Section ${position + 1} is missing required properties (index,${requireTitles ? " title," : ""} or text)`,
+    };
+
+    if (!section || typeof section !== "object") {
+      return missing;
+    }
+
+    const title: unknown = "title" in section ? section.title : undefined;
+    const index: unknown = "index" in section ? section.index : undefined;
+    const text: unknown = "text" in section ? section.text : undefined;
+
+    const hasTitle = Boolean(title) && typeof title === "string";
     const titleRequirementMet = requireTitles ? hasTitle : true;
-    const hasIndex = typeof section.index === "number" && section.index > 0;
-    if (!hasIndex || !titleRequirementMet || typeof section.text !== "string") {
-      return {
-        isValid: false,
-        error: `Section ${i + 1} is missing required properties (index,${requireTitles ? " title," : ""} or text)`,
-      };
+    const hasIndex = typeof index === "number" && index > 0;
+    if (!hasIndex || !titleRequirementMet || typeof text !== "string") {
+      return missing;
     }
   }
 

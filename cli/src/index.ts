@@ -396,7 +396,19 @@ function isCI(): boolean {
   return typeof ci === "string" && ci.length > 0 && ci !== "0";
 }
 
-interface UiBuildArgs {
+/**
+ * What yargs hands a handler: `_`, `$0`, and whatever the builder registered,
+ * none of it typed. Every field below is read through a narrowing helper rather
+ * than trusted here, which is why they are `unknown`. The index signature is
+ * what makes a yargs argv assignable to these shapes at all — without it an
+ * all-optional interface is a weak type, and TypeScript rejects an object that
+ * shares no property with it.
+ */
+interface ParsedArgs {
+  [argName: string]: unknown;
+}
+
+interface UiBuildArgs extends ParsedArgs {
   verbose?: unknown;
   quiet?: unknown;
   color?: unknown;
@@ -1852,4 +1864,4 @@ if (rawArgs.length === 0) {
   process.exit(0);
 }
 
-cli.parse();
+await cli.parse();

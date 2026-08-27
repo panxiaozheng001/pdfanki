@@ -1,6 +1,87 @@
 // lib/pdfJsonUtils.js
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 
+import type { BookJson, IndexEntry } from "./types/flashcards.js";
+
+/**
+ * A PDF's own info and metadata dictionaries. The keys are the document's, not
+ * ones this package chose, so every read narrows rather than assumes.
+ */
+type PdfDictionary = Record<string, unknown>;
+
+/** What `parsePdfWithPdfParse` collects for the transform below. */
+export interface PdfParseResult {
+  pageTexts: string[];
+  rawTextContent: string;
+  info: PdfDictionary;
+  metadata: unknown;
+  numpages: number;
+  numrender: number;
+  version: string | null;
+}
+
+/** A page as pdf2json models it: positioned runs of URI-encoded text. */
+interface Pdf2JsonRun {
+  T?: string;
+}
+
+interface Pdf2JsonText {
+  x: number;
+  y: number;
+  R?: Pdf2JsonRun[];
+}
+
+interface Pdf2JsonPage {
+  Texts?: Pdf2JsonText[];
+}
+
+/** What pdf2json hands `transformPdf2jsonResult`. */
+export interface Pdf2JsonResult {
+  pdfData: {
+    Pages?: Pdf2JsonPage[];
+    Meta?: PdfDictionary;
+  };
+  rawTextContent?: string;
+}
+
+/** The name of the file a transform is describing. */
+interface SourceFile {
+  name: string;
+}
+
+/**
+ * The first candidate that is a non-empty string. This is `||` over a run of
+ * fallbacks, kept because an empty PDF title must still fall through to the
+ * filename rather than be reported as the title.
+ */
+function firstNonEmptyString(...candidates: unknown[]): string | undefined {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+/** Read one field off a metadata dictionary the parser owns and nothing types. */
+function readMetadataString(source: unknown, key: "title" | "author"): string | undefined {
+  if (!source || typeof source !== "object" || !(key in source)) {
+    return undefined;
+  }
+
+  const value: unknown =
+    key === "title"
+      ? "title" in source
+        ? source.title
+        : undefined
+      : "author" in source
+        ? source.author
+        : undefined;
+
+  return typeof value === "string" ? value : undefined;
+}
+
 /** One extracted unit of PDF text: a chapter, or the whole document. */
 interface PdfSection {
   index: number;
@@ -16,7 +97,10 @@ interface PdfSection {
  * @param fileBuffer Raw PDF buffer
  * @param debug When true, enable pdf.js warnings (verbosity 1); default suppresses warnings.
  */
-export async function parsePdfWithPdfParse(fileBuffer, debug = false) {
+export async function parsePdfWithPdfParse(
+  fileBuffer: Buffer | Uint8Array,
+  debug = false,
+): Promise<PdfParseResult> {
   const parser = new PDFParse({
     data: fileBuffer,
     ...(debug ? { verbosity: VerbosityLevel.WARNINGS } : {}),
@@ -53,10 +137,14 @@ export async function parsePdfWithPdfParse(fileBuffer, debug = false) {
 /**
  * Transform pdf2json result to our expected format
  */
-export function transformPdf2jsonResult(parsedData, originalFile, index) {
+export function transformPdf2jsonResult(
+  parsedData: Pdf2JsonResult,
+  originalFile: SourceFile,
+  index: IndexEntry[] | null | undefined,
+): BookJson {
   const { pdfData, rawTextContent } = parsedData;
-  const pages = pdfData.Pages || [];
-  const meta = pdfData.Meta || {};
+  const pages: Pdf2JsonPage[] = pdfData.Pages ?? [];
+  const meta: PdfDictionary = pdfData.Meta ?? {};
 
   let content: PdfSection[] = [];
   let processingMethod = "pdf2json";
@@ -84,12 +172,12 @@ export function transformPdf2jsonResult(parsedData, originalFile, index) {
 
   // Build metadata
   const metadata = {
-    title: meta.Title || originalFile.name.replace(".pdf", ""),
-    author: meta.Author || "Unknown Author",
-    creator: meta.Creator || null,
-    producer: meta.Producer || null,
-    creationDate: meta.CreationDate || null,
-    modificationDate: meta.ModDate || null,
+    title: firstNonEmptyString(meta.Title) ?? originalFile.name.replace(".pdf", ""),
+    author: firstNonEmptyString(meta.Author) ?? "Unknown Author",
+    creator: firstNonEmptyString(meta.Creator) ?? null,
+    producer: firstNonEmptyString(meta.Producer) ?? null,
+    creationDate: firstNonEmptyString(meta.CreationDate) ?? null,
+    modificationDate: firstNonEmptyString(meta.ModDate) ?? null,
     fileType: "pdf",
     totalPages: pages.length,
     extractedPages: index ? getTotalPagesFromIndex(index) : pages.length,
@@ -97,11 +185,11 @@ export function transformPdf2jsonResult(parsedData, originalFile, index) {
     filteredSections: 0,
     extractedRange: index ? `Chapters 1-${index.length}` : "All Pages",
     processingMethod,
-    pdfVersion: meta.PDFFormatVersion || null,
-    hasAcroForm: meta.IsAcroFormPresent || false,
-    hasXFA: meta.IsXFAPresent || false,
-    hasIndex: !!index,
-    indexChapters: index?.length || 0,
+    pdfVersion: firstNonEmptyString(meta.PDFFormatVersion) ?? null,
+    hasAcroForm: Boolean(meta.IsAcroFormPresent),
+    hasXFA: Boolean(meta.IsXFAPresent),
+    hasIndex: Boolean(index),
+    indexChapters: index?.length ?? 0,
   };
 
   return {
@@ -113,10 +201,14 @@ export function transformPdf2jsonResult(parsedData, originalFile, index) {
 /**
  * Transform pdf-parse result to our expected format (similar to pdf2json path).
  */
-export function transformPdfParseResult(parsedData, originalFile, index) {
-  const pageTexts = parsedData.pageTexts || [];
+export function transformPdfParseResult(
+  parsedData: PdfParseResult,
+  originalFile: SourceFile,
+  index: IndexEntry[] | null | undefined,
+): BookJson {
+  const pageTexts: string[] = parsedData.pageTexts;
   const totalPages = parsedData.numpages || pageTexts.length;
-  const meta = parsedData.info || {};
+  const meta: PdfDictionary = parsedData.info;
   const rawTextContent = parsedData.rawTextContent;
 
   let content: PdfSection[] = [];
@@ -142,15 +234,21 @@ export function transformPdfParseResult(parsedData, originalFile, index) {
 
   const metadata = {
     title:
-      meta.Title ||
-      meta.title ||
-      parsedData.metadata?.title ||
-      originalFile.name.replace(".pdf", ""),
-    author: meta.Author || meta.author || parsedData.metadata?.author || "Unknown Author",
-    creator: meta.Creator || null,
-    producer: meta.Producer || null,
-    creationDate: meta.CreationDate || null,
-    modificationDate: meta.ModDate || null,
+      firstNonEmptyString(
+        meta.Title,
+        meta.title,
+        readMetadataString(parsedData.metadata, "title"),
+      ) ?? originalFile.name.replace(".pdf", ""),
+    author:
+      firstNonEmptyString(
+        meta.Author,
+        meta.author,
+        readMetadataString(parsedData.metadata, "author"),
+      ) ?? "Unknown Author",
+    creator: firstNonEmptyString(meta.Creator) ?? null,
+    producer: firstNonEmptyString(meta.Producer) ?? null,
+    creationDate: firstNonEmptyString(meta.CreationDate) ?? null,
+    modificationDate: firstNonEmptyString(meta.ModDate) ?? null,
     fileType: "pdf",
     totalPages: totalPages,
     extractedPages: index ? getTotalPagesFromIndex(index) : totalPages,
@@ -158,9 +256,9 @@ export function transformPdfParseResult(parsedData, originalFile, index) {
     filteredSections: 0,
     extractedRange: index ? `Chapters 1-${index.length}` : "All Pages",
     processingMethod,
-    pdfVersion: parsedData.version || null,
-    hasIndex: !!index,
-    indexChapters: index?.length || 0,
+    pdfVersion: parsedData.version,
+    hasIndex: Boolean(index),
+    indexChapters: index?.length ?? 0,
   };
 
   return {
@@ -172,7 +270,7 @@ export function transformPdfParseResult(parsedData, originalFile, index) {
 /**
  * Process PDF with chapter index
  */
-function processWithIndex(pages, index) {
+function processWithIndex(pages: Pdf2JsonPage[], index: IndexEntry[]): PdfSection[] {
   const content: PdfSection[] = [];
 
   index.forEach((chapter, chapterIndex) => {
@@ -220,7 +318,7 @@ function processWithIndex(pages, index) {
 /**
  * Process PDF with chapter index using plain page text.
  */
-function processWithIndexFromPageText(pageTexts, index) {
+function processWithIndexFromPageText(pageTexts: string[], index: IndexEntry[]): PdfSection[] {
   const content: PdfSection[] = [];
   const totalPages = pageTexts.length;
 
@@ -266,7 +364,12 @@ function processWithIndexFromPageText(pageTexts, index) {
 /**
  * Process PDF as a single text document (new default when no index)
  */
-function processAsSingleText(filteredPages, startPage, endPage, fileName) {
+function processAsSingleText(
+  filteredPages: Pdf2JsonPage[],
+  startPage: number,
+  endPage: number,
+  fileName: string,
+): PdfSection[] {
   let allText = "";
   let processedPages = 0;
 
@@ -301,7 +404,12 @@ function processAsSingleText(filteredPages, startPage, endPage, fileName) {
 /**
  * Process PDF as a single text document from per-page text.
  */
-function processAsSingleTextFromPages(filteredPages, startPage, endPage, fileName) {
+function processAsSingleTextFromPages(
+  filteredPages: string[],
+  startPage: number,
+  endPage: number,
+  fileName: string,
+): PdfSection[] {
   let allText = "";
   let processedPages = 0;
 
@@ -334,7 +442,7 @@ function processAsSingleTextFromPages(filteredPages, startPage, endPage, fileNam
 /**
  * Calculate total pages covered by index
  */
-function getTotalPagesFromIndex(index) {
+function getTotalPagesFromIndex(index: IndexEntry[]): number {
   return index.reduce((total, chapter) => {
     return total + (chapter.end - chapter.start + 1);
   }, 0);
@@ -343,7 +451,7 @@ function getTotalPagesFromIndex(index) {
 /**
  * Extract text content from a pdf2json page object
  */
-function extractTextFromPage(page) {
+function extractTextFromPage(page: Pdf2JsonPage): string {
   if (!page.Texts || !Array.isArray(page.Texts)) {
     return "";
   }
