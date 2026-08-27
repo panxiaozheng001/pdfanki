@@ -7,7 +7,7 @@ export interface SpinnerOptions {
 const FRAMES = ["|", "/", "-", "\\"];
 
 function eraseLine(stream: NodeJS.WriteStream) {
-  stream.write("\r\u001b[2K");
+  stream.write("\r\u001B[2K");
 }
 
 export interface Spinner {
@@ -32,22 +32,30 @@ export function createSpinner(options: SpinnerOptions): Spinner {
   }
 
   function start(text: string) {
-    if (!interactive) return;
+    if (!interactive) {
+      return;
+    }
     activeText = text;
     frameIndex = 0;
-    if (timer) clearInterval(timer);
+    if (timer) {
+      clearInterval(timer);
+    }
     draw();
     timer = setInterval(draw, intervalMs);
   }
 
   function update(text: string) {
-    if (!interactive) return;
+    if (!interactive) {
+      return;
+    }
     activeText = text;
     draw();
   }
 
   function stop() {
-    if (!interactive) return;
+    if (!interactive) {
+      return;
+    }
     if (timer) {
       clearInterval(timer);
       timer = null;

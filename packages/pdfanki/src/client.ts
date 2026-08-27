@@ -4,6 +4,7 @@ export {
   addToUndoStack,
   canUndo,
   deleteSection,
+  isBookJson,
   removeFromUndoStack,
   undoDelete,
   validateJsonStructure,

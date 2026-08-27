@@ -1,4 +1,5 @@
 import { callCodexProvider, type CodexReasoningEffort } from "./codexProvider.js";
+import { describeError } from "./describeError.js";
 import type { BookJson } from "./types/flashcards.js";
 
 export type SupportedProvider =
@@ -22,6 +23,7 @@ export interface GenerateFlashcardsOptions {
 }
 
 const GEMINI_TIMEOUT_MS = 180_000;
+const MS_PER_SECOND = 1000;
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -45,20 +47,27 @@ export async function generateFlashcards(options: GenerateFlashcardsOptions): Pr
   }
 
   switch (provider) {
-    case "gemini":
+    case "gemini": {
       return callGemini(options);
-    case "anthropic":
+    }
+    case "anthropic": {
       return callAnthropic(options);
-    case "openai":
+    }
+    case "openai": {
       return callOpenAI(options);
-    case "deepseek":
+    }
+    case "deepseek": {
       return callDeepSeek(options);
-    case "openrouter":
+    }
+    case "openrouter": {
       return callOpenRouter(options);
-    case "codex":
+    }
+    case "codex": {
       return callCodex(options);
-    default:
+    }
+    default: {
       throw new Error(`Unsupported provider "${String(provider)}".`);
+    }
   }
 }
 
@@ -74,7 +83,7 @@ async function callGemini(options: GenerateFlashcardsOptions): Promise<string> {
       model,
       contents: `${prompt}\n\n${content}`,
     });
-    const text = response.text;
+    const { text } = response;
     if (!text || typeof text !== "string") {
       throw new Error("Gemini returned no text content.");
     }
@@ -82,13 +91,15 @@ async function callGemini(options: GenerateFlashcardsOptions): Promise<string> {
   } catch (error) {
     if (isTimeoutError(error)) {
       throw Object.assign(
-        new Error(`Gemini request timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s.`),
-        { cause: error as Error },
+        new Error(
+          `Gemini request timed out after ${Math.round(GEMINI_TIMEOUT_MS / MS_PER_SECOND)}s.`,
+        ),
+        { cause: error },
       );
     }
 
-    throw Object.assign(new Error(`Gemini request failed: ${(error as Error).message}`), {
-      cause: error as Error,
+    throw Object.assign(new Error(`Gemini request failed: ${describeError(error)}`), {
+      cause: error,
     });
   }
 }
@@ -172,7 +183,8 @@ async function callOpenAICompatible(options: OpenAICompatibleOptions): Promise<s
   if (!apiKey) {
     throw new Error(`Missing API key for provider "${options.provider}".`);
   }
-  const OpenAI = (await import("openai")).default;
+  const openaiModule = await import("openai");
+  const OpenAI = openaiModule.default;
   const client = new OpenAI({
     apiKey,
     ...(baseURL ? { baseURL } : {}),
@@ -230,21 +242,55 @@ function extractOpenAICompatibleText(payload: OpenAICompatibleResponse): string 
   return text.length > 0 ? text : null;
 }
 
+function readErrorField(source: object, key: "message" | "name" | "code"): unknown {
+  if (key === "message") {
+    return "message" in source ? source.message : undefined;
+  }
+
+  if (key === "name") {
+    return "name" in source ? source.name : undefined;
+  }
+
+  return "code" in source ? source.code : undefined;
+}
+
+/** Read one string field off a value a provider SDK threw and nothing types. */
+function errorField(error: unknown, key: "message" | "name" | "code"): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const value = readErrorField(error, key);
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return typeof value === "number" ? String(value) : undefined;
+}
+
 function isTimeoutError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const err = error as { message?: string; name?: string; cause?: unknown };
+  if (!error || typeof error !== "object") {
+    return false;
+  }
 
-  const message = err.message?.toLowerCase();
-  if (err.name === "AbortError") return true;
-  if (message?.includes("timeout")) return true;
+  const message = errorField(error, "message")?.toLowerCase();
+  if (errorField(error, "name") === "AbortError") {
+    return true;
+  }
+  if (message?.includes("timeout")) {
+    return true;
+  }
 
-  const cause = err.cause as
-    | { message?: string; code?: string | number; name?: string }
-    | undefined;
-  const causeMessage = cause?.message?.toLowerCase();
-  if (cause?.name === "AbortError") return true;
-  if (causeMessage?.includes("timeout")) return true;
-  if (cause?.code && String(cause.code).toLowerCase().includes("timeout")) {
+  const cause: unknown = "cause" in error ? error.cause : undefined;
+  const causeMessage = errorField(cause, "message")?.toLowerCase();
+  const causeCode = errorField(cause, "code");
+  if (errorField(cause, "name") === "AbortError") {
+    return true;
+  }
+  if (causeMessage?.includes("timeout")) {
+    return true;
+  }
+  if (causeCode?.toLowerCase().includes("timeout")) {
     return true;
   }
 

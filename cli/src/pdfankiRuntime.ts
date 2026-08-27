@@ -1,12 +1,3 @@
-import type {
-  BookJson,
-  ContentSection,
-  ConvertFileOptions,
-  ConvertFileResult,
-  EpubTitleFilter,
-  SupportedProvider,
-} from "@shbernal/pdfanki/server";
-
 type ServerModule = typeof import("@shbernal/pdfanki/server");
 type ClientModule = typeof import("@shbernal/pdfanki/client");
 
@@ -27,7 +18,7 @@ export type {
   ConvertFileResult,
   EpubTitleFilter,
   SupportedProvider,
-};
+} from "@shbernal/pdfanki/server";
 
 export const {
   DEFAULT_EPUB_TITLE_FILTERS,
@@ -36,4 +27,4 @@ export const {
   generateFlashcards,
 } = serverModule;
 
-export const { validateJsonStructure } = clientModule;
+export const { isBookJson, validateJsonStructure } = clientModule;

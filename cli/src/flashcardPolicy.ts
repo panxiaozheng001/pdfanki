@@ -72,8 +72,12 @@ const duplicateFronts = (cards: readonly Card[]): CanonicalIssue[] => {
   return cards
     .filter((card) => {
       const front = card.headingText;
-      if (!front) return false;
-      if (seen.has(front)) return true;
+      if (!front) {
+        return false;
+      }
+      if (seen.has(front)) {
+        return true;
+      }
       seen.add(front);
       return false;
     })

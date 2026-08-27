@@ -40,7 +40,8 @@ export type CodexProviderOptions = {
 
 const DEFAULT_CODEX_COMMAND = "codex";
 const DEFAULT_CODEX_TIMEOUT_MS = 600_000;
-const MAX_ERROR_OUTPUT_LENGTH = 2_000;
+const MAX_ERROR_OUTPUT_LENGTH = 2000;
+const MS_PER_SECOND = 1000;
 const CODEX_PROFILE_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export function buildCodexExecPrompt(options: { prompt: string; content: string }): string {
@@ -147,19 +148,23 @@ export function runCodexCli(
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       reject(
-        new Error(`Codex CLI provider timed out after ${Math.round(options.timeoutMs / 1000)}s.`),
+        new Error(
+          `Codex CLI provider timed out after ${Math.round(options.timeoutMs / MS_PER_SECOND)}s.`,
+        ),
       );
     }, options.timeoutMs);
     timeout.unref?.();
 
-    child.stdout.on("data", (chunk) => {
+    child.stdout.on("data", (chunk: Buffer) => {
       stdout.push(Buffer.from(chunk));
     });
-    child.stderr.on("data", (chunk) => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr.push(Buffer.from(chunk));
     });
     child.on("error", (error) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       clearTimeout(timeout);
       reject(
@@ -169,7 +174,9 @@ export function runCodexCli(
       );
     });
     child.on("close", (exitCode, signal) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       clearTimeout(timeout);
       resolve({
@@ -194,8 +201,12 @@ function normalizeTimeoutMs(value: number): number {
 function normalizeCodexReasoningEffort(
   value?: CodexReasoningEffort,
 ): CodexReasoningEffort | undefined {
-  if (!value) return undefined;
-  if (CODEX_REASONING_EFFORTS.includes(value)) return value;
+  if (!value) {
+    return undefined;
+  }
+  if (CODEX_REASONING_EFFORTS.includes(value)) {
+    return value;
+  }
   throw new Error(
     `Invalid Codex reasoning effort "${value}". Expected one of: ${CODEX_REASONING_EFFORTS.join(", ")}.`,
   );
@@ -203,8 +214,12 @@ function normalizeCodexReasoningEffort(
 
 function normalizeCodexProfile(value?: string): string | undefined {
   const normalized = value?.trim();
-  if (!normalized) return undefined;
-  if (CODEX_PROFILE_PATTERN.test(normalized)) return normalized;
+  if (!normalized) {
+    return undefined;
+  }
+  if (CODEX_PROFILE_PATTERN.test(normalized)) {
+    return normalized;
+  }
   throw new Error(
     `Invalid Codex profile "${value}". Use letters, numbers, hyphens, or underscores.`,
   );
@@ -212,7 +227,9 @@ function normalizeCodexProfile(value?: string): string | undefined {
 
 function formatCodexErrorOutput(value: string): string {
   const cleaned = redactSensitiveText(value).trim();
-  if (!cleaned) return "";
+  if (!cleaned) {
+    return "";
+  }
   const truncated =
     cleaned.length > MAX_ERROR_OUTPUT_LENGTH
       ? `${cleaned.slice(0, MAX_ERROR_OUTPUT_LENGTH)}...`
@@ -222,7 +239,7 @@ function formatCodexErrorOutput(value: string): string {
 
 function redactSensitiveText(value: string): string {
   return value
-    .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[redacted]")
-    .replace(/\b(sk-[A-Za-z0-9_-]{12,})\b/g, "[redacted-api-key]")
-    .replace(/((?:CODEX|OPENAI)_API_KEY=)\S+/gi, "$1[redacted]");
+    .replaceAll(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[redacted]")
+    .replaceAll(/\b(sk-[A-Za-z0-9_-]{12,})\b/g, "[redacted-api-key]")
+    .replaceAll(/((?:CODEX|OPENAI)_API_KEY=)\S+/gi, "$1[redacted]");
 }

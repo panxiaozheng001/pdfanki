@@ -25,10 +25,12 @@ import {
   type SupportedProvider,
 } from "./config.js";
 import { providerRequiresApiKey, readProviderApiKey } from "./env.js";
+import { describeError } from "./errors.js";
 import { parseSectionCards } from "./flashcardPolicy.js";
 import {
   convertFileFromPath,
   generateFlashcards as generateFlashcardsFromServer,
+  isBookJson,
   validateJsonStructure,
   type BookJson,
   type ContentSection,
@@ -48,8 +50,8 @@ function toKebabAlnum(value: string): string {
   const normalized = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "-");
-  const collapsed = normalized.replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9]+/gi, "-");
+  const collapsed = normalized.replaceAll(/-+/g, "-").replaceAll(/^-+|-+$/g, "");
   return collapsed || "deck";
 }
 
@@ -59,13 +61,19 @@ interface IndexTemplateEntry {
   title?: string;
 }
 
+/** How many pages a placeholder section spans, so the template is editable. */
+const TEMPLATE_PAGES_PER_SECTION = 2;
+const MS_PER_SECOND = 1000;
+const DEFAULT_PREVIEW_CHARS = 120;
+
 function buildIndexTemplate(count: number): IndexTemplateEntry[] {
   const items: IndexTemplateEntry[] = [];
-  for (let i = 1; i <= count; i++) {
-    const start = (i - 1) * 2 + 1;
-    const end = start + 1;
-    items.push({ start, end, title: `Section ${i}` });
+  for (let position = 1; position <= count; position++) {
+    const start = (position - 1) * TEMPLATE_PAGES_PER_SECTION + 1;
+    const end = start + TEMPLATE_PAGES_PER_SECTION - 1;
+    items.push({ start, end, title: `Section ${position}` });
   }
+
   return items;
 }
 
@@ -102,8 +110,33 @@ function buildDeck(deckTitle: string, cards: readonly Card[]): Deck {
   };
 }
 
+/**
+ * Every provider the CLI accepts, in one place: `--provider`'s `choices` and the
+ * narrowing below read the same list, so neither can name one the other does not.
+ */
+const SUPPORTED_PROVIDERS = [
+  "gemini",
+  "anthropic",
+  "openai",
+  "deepseek",
+  "openrouter",
+  "codex",
+] as const satisfies readonly SupportedProvider[];
+
+/** A yargs string option as given, or undefined when it was not passed. */
+function optionalStringArg(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** The provider a `--provider` flag names, checked against the ones that exist. */
+function optionalProviderArg(value: unknown): SupportedProvider | undefined {
+  return SUPPORTED_PROVIDERS.find((provider) => provider === value);
+}
+
 function normalizePathArg(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -137,8 +170,12 @@ function normalizePreviewCliArgs(args: string[]): string[] {
 }
 
 function flagProvided(value: unknown): boolean {
-  if (value === undefined) return false;
-  if (typeof value === "boolean") return value;
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
   return true;
 }
 
@@ -193,37 +230,43 @@ function resolveIndexTemplatePath(
 }
 
 function formatDuration(durationMs: number): string {
-  const seconds = (durationMs / 1000).toFixed(2);
+  const seconds = (durationMs / MS_PER_SECOND).toFixed(2);
   return `${seconds}s`;
 }
 
 const JSON_COLOR_ANSI = {
-  blue: "\u001b[34m",
-  cyan: "\u001b[36m",
-  green: "\u001b[32m",
-  yellow: "\u001b[33m",
-  red: "\u001b[31m",
-  gray: "\u001b[90m",
-  lightGray: "\u001b[37m",
-  reset: "\u001b[0m",
+  blue: "\u001B[34m",
+  cyan: "\u001B[36m",
+  green: "\u001B[32m",
+  yellow: "\u001B[33m",
+  red: "\u001B[31m",
+  gray: "\u001B[90m",
+  lightGray: "\u001B[37m",
+  reset: "\u001B[0m",
 } as const;
 
-const ANSI_UNDERLINE = "\u001b[4m";
+const ANSI_UNDERLINE = "\u001B[4m";
 
 function colorizeText(text: string, color: keyof typeof JSON_COLOR_ANSI, enabled: boolean): string {
-  if (!enabled || color === "reset") return text;
+  if (!enabled || color === "reset") {
+    return text;
+  }
   return `${JSON_COLOR_ANSI[color]}${text}${JSON_COLOR_ANSI.reset}`;
 }
 
 function formatSectionHeading(text: string, enabled: boolean): string {
-  if (!enabled) return text;
+  if (!enabled) {
+    return text;
+  }
   return `${ANSI_UNDERLINE}${JSON_COLOR_ANSI.blue}${text}${JSON_COLOR_ANSI.reset}`;
 }
 
 function colorizeJson(payload: string, enabled: boolean): string {
-  if (!enabled) return payload;
+  if (!enabled) {
+    return payload;
+  }
 
-  return payload.replace(
+  return payload.replaceAll(
     /("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(?::)?|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\btrue\b|\bfalse\b|\bnull\b)/g,
     (token) => {
       let color: keyof typeof JSON_COLOR_ANSI | null = null;
@@ -248,7 +291,7 @@ function colorizeJson(payload: string, enabled: boolean): string {
 function formatJsonOutput(value: unknown, useColor: boolean): string {
   const payload = JSON.stringify(value, null, 2);
   if (typeof payload !== "string") {
-    throw new Error("Unable to serialize JSON output.");
+    throw new TypeError("Unable to serialize JSON output.");
   }
 
   return `${colorizeJson(payload, useColor)}\n`;
@@ -263,9 +306,13 @@ function formatCheckStatus(ok: boolean, useColor: boolean): string {
 }
 
 function parsePageRange(pageRange?: string): { start: number; end: number } | null {
-  if (!pageRange) return null;
+  if (!pageRange) {
+    return null;
+  }
   const match = /^(\d+)-(\d+)$/.exec(pageRange);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   return {
     start: Number(match[1]),
     end: Number(match[2]),
@@ -286,21 +333,24 @@ function findPageOverlaps(sections: ContentSection[]): {
 }[] {
   const ranges = sections
     .map((section) => {
-      const parsed = parsePageRange(section.pageRange);
-      if (!parsed) return null;
+      const { pageRange } = section;
+      if (!pageRange) {
+        return null;
+      }
+
+      const parsed = parsePageRange(pageRange);
+      if (!parsed) {
+        return null;
+      }
+
       return {
         title: section.title?.trim() || `Section ${section.index}`,
-        range: section.pageRange!,
+        range: pageRange,
         start: parsed.start,
         end: parsed.end,
       };
     })
-    .filter(Boolean) as {
-    title: string;
-    range: string;
-    start: number;
-    end: number;
-  }[];
+    .filter((range) => range !== null);
 
   const overlaps: {
     leftTitle: string;
@@ -387,7 +437,9 @@ function logPdfExtractionSummary(options: {
 const MAX_MARKDOWN_VALIDATION_ATTEMPTS = 3;
 
 function toBool(value: unknown, fallback: boolean): boolean {
-  if (typeof value === "boolean") return value;
+  if (typeof value === "boolean") {
+    return value;
+  }
   return fallback;
 }
 
@@ -404,9 +456,7 @@ function isCI(): boolean {
  * all-optional interface is a weak type, and TypeScript rejects an object that
  * shares no property with it.
  */
-interface ParsedArgs {
-  [argName: string]: unknown;
-}
+type ParsedArgs = Record<string, unknown>;
 
 interface UiBuildArgs extends ParsedArgs {
   verbose?: unknown;
@@ -447,8 +497,8 @@ function buildCliUi(args: UiBuildArgs): CliUi {
   };
 }
 
-function withUiOptions<T>(y: Argv<T>): Argv<T> {
-  return y
+function withUiOptions<T>(command: Argv<T>): Argv<T> {
+  return command
     .option("verbose", {
       type: "boolean",
       default: false,
@@ -547,7 +597,7 @@ async function handleListLocalPrompts(args: UiBuildArgs): Promise<void> {
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to list prompts: ${(error as Error).message}`,
+      `Failed to list prompts: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -567,7 +617,7 @@ async function handleListRemotePrompts(args: UiBuildArgs): Promise<void> {
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to list remote prompts: ${(error as Error).message}`,
+      `Failed to list remote prompts: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -598,7 +648,7 @@ async function handleGetPrompt(
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to install prompt: ${(error as Error).message}`,
+      `Failed to install prompt: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -611,14 +661,15 @@ async function handlePrintConfig(args: UiBuildArgs): Promise<void> {
     const settings = await runWithSpinner(ui.spinner, "Loading configuration...", async () => {
       const paths = await ensureConfig();
       const raw = await fs.readFile(paths.settings, "utf8");
-      return JSON.parse(raw);
+      const contents: unknown = JSON.parse(raw);
+      return contents;
     });
 
     process.stdout.write(formatJsonOutput(settings, ui.useColor));
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to print config: ${(error as Error).message}`,
+      `Failed to print config: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -635,7 +686,7 @@ async function handleResetConfig(args: UiBuildArgs): Promise<void> {
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to reset config: ${(error as Error).message ?? error}`,
+      `Failed to reset config: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -697,7 +748,9 @@ function normalizeIntegerOption(
   flagName: string,
   minimum: number,
 ): number | undefined {
-  if (typeof value === "undefined") return undefined;
+  if (value === undefined) {
+    return undefined;
+  }
   if (
     typeof value !== "number" ||
     !Number.isFinite(value) ||
@@ -722,8 +775,8 @@ function buildBasicExtractPayload(book: BookJson): {
   };
 }
 
-function withSubcommandHelp<T>(y: Argv<T>): Argv<T> {
-  return y.updateStrings({ "Commands:": "Subcommands:" });
+function withSubcommandHelp<T>(command: Argv<T>): Argv<T> {
+  return command.updateStrings({ "Commands:": "Subcommands:" });
 }
 
 // Handler for group commands that only register subcommands. yargs requires a
@@ -733,48 +786,48 @@ const requireSubcommand = async (): Promise<void> => {
   // intentionally empty
 };
 
-function withInputPositional<T>(y: Argv<T>, description: string): Argv<T> {
-  return y.positional("input", {
+function withInputPositional<T>(command: Argv<T>, description: string): Argv<T> {
+  return command.positional("input", {
     type: "string",
     describe: description,
     demandOption: true,
   });
 }
 
-function withOutputOption<T>(y: Argv<T>, description: string): Argv<T> {
-  return y.option("out", {
+function withOutputOption<T>(command: Argv<T>, description: string): Argv<T> {
+  return command.option("out", {
     alias: "o",
     type: "string",
     describe: description,
   });
 }
 
-function withDryRunOption<T>(y: Argv<T>): Argv<T> {
-  return y.option("dry-run", {
+function withDryRunOption<T>(command: Argv<T>): Argv<T> {
+  return command.option("dry-run", {
     type: "boolean",
     default: false,
     describe: "Run normally but skip writing the requested output and failure artifact files.",
   });
 }
 
-function withDeckTitleOption<T>(y: Argv<T>): Argv<T> {
-  return y.option("deck-title", {
+function withDeckTitleOption<T>(command: Argv<T>): Argv<T> {
+  return command.option("deck-title", {
     alias: "d",
     type: "string",
     describe: "Anki deck title. Defaults to the input filename or markdown H1.",
   });
 }
 
-function withDebugOption<T>(y: Argv<T>): Argv<T> {
-  return y.option("debug", {
+function withDebugOption<T>(command: Argv<T>): Argv<T> {
+  return command.option("debug", {
     type: "boolean",
     default: false,
     describe: "Enable verbose PDF parser warnings (pdf.js verbosity).",
   });
 }
 
-function withPdfSourceOptions<T>(y: Argv<T>): Argv<T> {
-  return y
+function withPdfSourceOptions<T>(command: Argv<T>): Argv<T> {
+  return command
     .option("index", {
       type: "string",
       describe: "Path to a JSON index for PDF chapter separation.",
@@ -785,8 +838,8 @@ function withPdfSourceOptions<T>(y: Argv<T>): Argv<T> {
     });
 }
 
-function withEpubSourceOptions<T>(y: Argv<T>): Argv<T> {
-  return y
+function withEpubSourceOptions<T>(command: Argv<T>): Argv<T> {
+  return command
     .option("start-section", {
       type: "number",
       describe: "First EPUB section to extract (1-based, inclusive).",
@@ -831,11 +884,11 @@ function getPreviewFlagMode(args: string[]): "enabled" | "disabled" | "unset" {
   return "unset";
 }
 
-function withGenerationOptions<T>(y: Argv<T>): Argv<T> {
-  return y
+function withGenerationOptions<T>(command: Argv<T>): Argv<T> {
+  return command
     .option("provider", {
       type: "string",
-      choices: ["gemini", "anthropic", "openai", "deepseek", "openrouter", "codex"],
+      choices: [...SUPPORTED_PROVIDERS],
       describe:
         "AI provider. API providers expect PROVIDER_API_KEY; experimental codex uses the local Codex CLI login. Defaults to settings.json.",
     })
@@ -872,7 +925,7 @@ async function handleIndexTemplate(
   let ui: CliUi | null = null;
   try {
     ui = buildCliUi(args);
-    const count = args.count as number;
+    const count: unknown = args.count;
     if (typeof count !== "number" || !Number.isInteger(count) || count <= 0) {
       throw new Error("Provide a positive integer for <count> when creating an index template.");
     }
@@ -893,7 +946,7 @@ async function handleIndexTemplate(
   } catch (error) {
     ui?.spinner.stop();
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Failed to create index template: ${(error as Error).message}`,
+      `Failed to create index template: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -938,13 +991,10 @@ async function loadStructuredSource(options: {
   if (sourceKind === "json") {
     return runWithSpinner(ui.spinner, "Loading extracted JSON...", async () => {
       const raw = await fs.readFile(inputPath, "utf8");
-      const parsed = JSON.parse(raw);
-      const validation = validateJsonStructure(parsed, {
-        requireMetadata: false,
-        requireTitles: false,
-      });
-      if (!validation.isValid) {
-        throw new Error(`Invalid JSON input: ${validation.error}`);
+      const parsed: unknown = JSON.parse(raw);
+      const shape = { requireMetadata: false, requireTitles: false };
+      if (!isBookJson(parsed, shape)) {
+        throw new Error(`Invalid JSON input: ${validateJsonStructure(parsed, shape).error}`);
       }
 
       return {
@@ -1011,8 +1061,9 @@ async function runWorkflowCommand(
     const settings = await loadCliSettings(ui);
     const inputPath = normalizeRequiredInputPath(args.input);
     const outputBaseName = toKebabAlnum(parse(inputPath).name || "deck");
-    const outputExtension = targetKind === "json" ? ".json" : targetKind === "md" ? ".md" : ".apkg";
-    const outputArtifactKind = outputExtension.slice(1) as OutputArtifactKind;
+    const outputArtifactKind: OutputArtifactKind =
+      targetKind === "json" ? "json" : targetKind === "md" ? "md" : "apkg";
+    const outputExtension = `.${outputArtifactKind}`;
     const defaultOutputDir = normalizePathArg(
       settings.output.paths[outputArtifactKind] ?? settings.output.path,
     );
@@ -1128,7 +1179,7 @@ async function runWorkflowCommand(
                 : typeof previewChars === "number"
                   ? true
                   : settings.epub.preview,
-          previewChars: previewChars ?? settings.epub.previewChars ?? 120,
+          previewChars: previewChars ?? settings.epub.previewChars ?? DEFAULT_PREVIEW_CHARS,
         },
       },
       indexPath,
@@ -1178,17 +1229,16 @@ async function runWorkflowCommand(
       return;
     }
 
-    const provider =
-      (args.provider as SupportedProvider | undefined) ?? settings.generation.defaultProvider;
+    const provider = optionalProviderArg(args.provider) ?? settings.generation.defaultProvider;
     const providerSettings = settings.generation.providers[provider];
     const defaultModel =
       providerSettings?.defaultModel ??
       settings.generation.providers[settings.generation.defaultProvider]?.defaultModel;
-    const model = (args.model as string | undefined) ?? defaultModel;
+    const model = optionalStringArg(args.model) ?? defaultModel;
     const requiresApiKey = providerRequiresApiKey(provider);
     const apiKeyLookup = requiresApiKey ? readProviderApiKey(provider) : null;
-    const hasCodexReasoningEffortFlag = typeof args.codexReasoningEffort !== "undefined";
-    const hasCodexProfileFlag = typeof args.codexProfile !== "undefined";
+    const hasCodexReasoningEffortFlag = args.codexReasoningEffort !== undefined;
+    const hasCodexProfileFlag = args.codexProfile !== undefined;
 
     if (provider !== "codex" && (hasCodexReasoningEffortFlag || hasCodexProfileFlag)) {
       throw new Error(
@@ -1243,7 +1293,7 @@ async function runWorkflowCommand(
     }
 
     const prompt = await runWithSpinner(spinner, "Loading prompt...", async () =>
-      loadPrompt((args.prompt as string | undefined) ?? settings.generation.defaultPrompt),
+      loadPrompt(optionalStringArg(args.prompt) ?? settings.generation.defaultPrompt),
     );
 
     const deckTitle =
@@ -1442,7 +1492,7 @@ async function runWorkflowCommand(
           logger.warn(`Failed section output saved to ${failedSectionPath} (${sectionLabel})`);
         }
 
-        throw new Error(`Section ${position + 1} failed: ${(error as Error).message}`, {
+        throw new Error(`Section ${position + 1} failed: ${describeError(error)}`, {
           cause: error,
         });
       }
@@ -1508,7 +1558,7 @@ async function runWorkflowCommand(
       ui?.progress.clear();
     }
     (ui?.logger ?? createLogger({ level: "info", useColor: false })).error(
-      `Conversion failed: ${(error as Error).message}`,
+      `Conversion failed: ${describeError(error)}`,
     );
     process.exitCode = 1;
   }
@@ -1523,8 +1573,8 @@ const cli = yargs(rawArgs)
   .command(
     "pdf",
     "Convert from PDF inputs.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "json <input>",
           "Extract structured JSON from a PDF.",
@@ -1592,8 +1642,8 @@ const cli = yargs(rawArgs)
   .command(
     "epub",
     "Convert from EPUB inputs.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "json <input>",
           "Extract structured JSON from an EPUB.",
@@ -1660,8 +1710,8 @@ const cli = yargs(rawArgs)
   .command(
     "json",
     "Convert from extracted JSON inputs.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "md <input>",
           "Generate markdown flashcards from extracted JSON.",
@@ -1704,8 +1754,8 @@ const cli = yargs(rawArgs)
   .command(
     "md",
     "Convert from markdown flashcard inputs.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "anki <input>",
           "Build an Anki package from markdown flashcards.",
@@ -1728,8 +1778,8 @@ const cli = yargs(rawArgs)
   .command(
     "config",
     "Manage pdfanki configuration.",
-    (y) =>
-      withSubcommandHelp(withUiOptions(y))
+    (command) =>
+      withSubcommandHelp(withUiOptions(command))
         .command(
           "reset",
           "Remove and recreate the pdfanki config directory with defaults.",
@@ -1748,8 +1798,8 @@ const cli = yargs(rawArgs)
   .command(
     "prompts",
     "Manage local and remote prompts.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "list",
           "List prompt names available in the local pdfanki prompts directory.",
@@ -1787,8 +1837,8 @@ const cli = yargs(rawArgs)
   .command(
     "index",
     "Work with PDF index templates and helpers.",
-    (y) =>
-      withSubcommandHelp(y)
+    (command) =>
+      withSubcommandHelp(command)
         .command(
           "template <count> [out]",
           "Generate a blank JSON index template.",
@@ -1820,21 +1870,21 @@ const cli = yargs(rawArgs)
   .command(
     "reset-config",
     false,
-    (y) => withUiOptions(y),
+    (command) => withUiOptions(command),
     async (args) => handleResetConfig(args),
   )
   .command(
     "list-prompts",
     false,
-    (y) => withUiOptions(y),
+    (command) => withUiOptions(command),
     async (args) => handleListLocalPrompts(args),
   )
   .command(
     "index-template <count> [out]",
     false,
-    (y) =>
+    (command) =>
       withUiOptions(
-        y
+        command
           .positional("count", {
             type: "number",
             describe: "Number of sections in the template.",

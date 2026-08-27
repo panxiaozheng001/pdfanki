@@ -15,18 +15,18 @@ export function cleanExtractedText(text: unknown): string {
 
   // 1. Remove special characters like null characters and carriage returns
   cleanedText = cleanedText
-    .replace(/\u0000/g, "") // Remove null characters
-    .replace(/\r/g, ""); // Remove carriage returns
+    .replaceAll("\0", "") // Remove null characters
+    .replaceAll("\r", ""); // Remove carriage returns
 
   // 2. Handle newline sequences
   // First replace double newlines with single space
-  cleanedText = cleanedText.replace(/\n\n/g, " ");
+  cleanedText = cleanedText.replaceAll("\n\n", " ");
 
   // Then replace remaining single newlines with space
-  cleanedText = cleanedText.replace(/\n/g, " ");
+  cleanedText = cleanedText.replaceAll("\n", " ");
 
   // 3. Clean up multiple consecutive spaces
-  cleanedText = cleanedText.replace(/\s+/g, " ");
+  cleanedText = cleanedText.replaceAll(/\s+/g, " ");
 
   // 4. Trim whitespace from start and end
   cleanedText = cleanedText.trim();

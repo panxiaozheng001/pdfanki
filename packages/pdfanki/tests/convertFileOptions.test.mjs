@@ -162,7 +162,7 @@ test("the returned text is the flattened form of the retained sections", async (
   });
 
   assert.equal(result.data.content.length, 1);
-  const section = result.data.content[0];
+  const [section] = result.data.content;
   assert.ok(result.text.startsWith(`${section.index}. ${section.title}`));
   assert.ok(result.text.includes(section.text));
 });

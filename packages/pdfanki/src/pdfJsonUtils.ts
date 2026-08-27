@@ -20,6 +20,9 @@ export interface PdfParseResult {
   version: string | null;
 }
 
+/** How far apart two pdf2json y-positions can be and still be one line. */
+const SAME_LINE_TOLERANCE = 0.1;
+
 /** A page as pdf2json models it: positioned runs of URI-encoded text. */
 interface Pdf2JsonRun {
   T?: string;
@@ -62,6 +65,23 @@ function firstNonEmptyString(...candidates: unknown[]): string | undefined {
   }
 
   return undefined;
+}
+
+function isDictionary(value: unknown): value is PdfDictionary {
+  return Boolean(value) && typeof value === "object";
+}
+
+/** Read one field off an object the parser owns and nothing types. */
+function readUnknownField(source: unknown, key: "_metadata" | "PDFFormatVersion"): unknown {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+
+  if (key === "_metadata") {
+    return "_metadata" in source ? source._metadata : undefined;
+  }
+
+  return "PDFFormatVersion" in source ? source.PDFFormatVersion : undefined;
 }
 
 /** Read one field off a metadata dictionary the parser owns and nothing types. */
@@ -114,20 +134,20 @@ export async function parsePdfWithPdfParse(
 
     const pageTexts = textResult.pages?.map((page) => page.text ?? "") ?? [];
 
-    const metadata = infoResult.metadata
-      ? ((infoResult.metadata as { _metadata?: unknown })._metadata ?? infoResult.metadata)
+    // pdf.js nests the document's own metadata one level down under
+    // `_metadata` when it has any; otherwise the outer object is it.
+    const metadata: unknown = infoResult.metadata
+      ? (readUnknownField(infoResult.metadata, "_metadata") ?? infoResult.metadata)
       : {};
 
     return {
       pageTexts,
       rawTextContent: textResult.text || "",
-      info: infoResult.info || {},
+      info: isDictionary(infoResult.info) ? infoResult.info : {},
       metadata,
       numpages: textResult.total || infoResult.total || pageTexts.length,
       numrender: pageTexts.length,
-      version:
-        (infoResult.info && (infoResult.info as { PDFFormatVersion?: string }).PDFFormatVersion) ||
-        null,
+      version: firstNonEmptyString(readUnknownField(infoResult.info, "PDFFormatVersion")) ?? null,
     };
   } finally {
     await parser.destroy();
@@ -209,7 +229,7 @@ export function transformPdfParseResult(
   const pageTexts: string[] = parsedData.pageTexts;
   const totalPages = parsedData.numpages || pageTexts.length;
   const meta: PdfDictionary = parsedData.info;
-  const rawTextContent = parsedData.rawTextContent;
+  const { rawTextContent } = parsedData;
 
   let content: PdfSection[] = [];
   let processingMethod = "pdf-parse";
@@ -250,7 +270,7 @@ export function transformPdfParseResult(
     creationDate: firstNonEmptyString(meta.CreationDate) ?? null,
     modificationDate: firstNonEmptyString(meta.ModDate) ?? null,
     fileType: "pdf",
-    totalPages: totalPages,
+    totalPages,
     extractedPages: index ? getTotalPagesFromIndex(index) : totalPages,
     extractedSections: content.length,
     filteredSections: 0,
@@ -294,7 +314,7 @@ function processWithIndex(pages: Pdf2JsonPage[], index: IndexEntry[]): PdfSectio
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
       const pageText = extractTextFromPage(pages[pageIndex]);
       if (pageText && pageText.trim().length > 0) {
-        chapterText += pageText.trim() + "\n\n";
+        chapterText += `${pageText.trim()}\n\n`;
       }
     }
 
@@ -341,7 +361,7 @@ function processWithIndexFromPageText(pageTexts: string[], index: IndexEntry[]):
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
       const pageText = pageTexts[pageIndex];
       if (pageText && pageText.trim().length > 0) {
-        chapterText += pageText.trim() + "\n\n";
+        chapterText += `${pageText.trim()}\n\n`;
       }
     }
 
@@ -376,7 +396,7 @@ function processAsSingleText(
   filteredPages.forEach((page) => {
     const pageText = extractTextFromPage(page);
     if (pageText && pageText.trim().length > 0) {
-      allText += pageText.trim() + "\n\n";
+      allText += `${pageText.trim()}\n\n`;
       processedPages++;
     }
   });
@@ -393,7 +413,7 @@ function processAsSingleText(
         text: allText.trim(),
         pageRange: `${actualStartPage}-${actualEndPage}`,
         pageCount: endPage - startPage + 1,
-        processedPages: processedPages,
+        processedPages,
       },
     ];
   }
@@ -415,7 +435,7 @@ function processAsSingleTextFromPages(
 
   filteredPages.forEach((pageText) => {
     if (pageText && pageText.trim().length > 0) {
-      allText += pageText.trim() + "\n\n";
+      allText += `${pageText.trim()}\n\n`;
       processedPages++;
     }
   });
@@ -431,7 +451,7 @@ function processAsSingleTextFromPages(
         text: allText.trim(),
         pageRange: `${actualStartPage}-${actualEndPage}`,
         pageCount: endPage - startPage + 1,
-        processedPages: processedPages,
+        processedPages,
       },
     ];
   }
@@ -443,9 +463,7 @@ function processAsSingleTextFromPages(
  * Calculate total pages covered by index
  */
 function getTotalPagesFromIndex(index: IndexEntry[]): number {
-  return index.reduce((total, chapter) => {
-    return total + (chapter.end - chapter.start + 1);
-  }, 0);
+  return index.reduce((total, chapter) => total + (chapter.end - chapter.start + 1), 0);
 }
 
 /**
@@ -459,12 +477,13 @@ function extractTextFromPage(page: Pdf2JsonPage): string {
   let pageText = "";
 
   // Sort texts by Y position (top to bottom), then X position (left to right)
-  const sortedTexts = page.Texts.toSorted((a, b) => {
-    if (Math.abs(a.y - b.y) < 0.1) {
-      // Same line
-      return a.x - b.x; // Sort by X position
+  // Reading order: down the page first, then across whatever shares a line.
+  const sortedTexts = page.Texts.toSorted((left, right) => {
+    if (Math.abs(left.y - right.y) < SAME_LINE_TOLERANCE) {
+      return left.x - right.x;
     }
-    return a.y - b.y; // Sort by Y position
+
+    return left.y - right.y;
   });
 
   sortedTexts.forEach((textObj) => {
@@ -473,7 +492,7 @@ function extractTextFromPage(page: Pdf2JsonPage): string {
         if (run.T) {
           // Decode URI-encoded text
           const decodedText = decodeURIComponent(run.T);
-          pageText += decodedText + " ";
+          pageText += `${decodedText} `;
         }
       });
     }

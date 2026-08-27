@@ -17,7 +17,9 @@ const parsed = (overrides = {}) => ({
 async function captureWarnings(action) {
   const warnings = [];
   const original = console.warn;
-  console.warn = (message) => warnings.push(String(message));
+  console.warn = (message) => {
+    warnings.push(String(message));
+  };
   try {
     return { result: await action(), warnings };
   } finally {

@@ -2,17 +2,12 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 
 import { ensureConfig, sanitizePromptName } from "./config.js";
+import { isNotFoundError } from "./errors.js";
 
 const GITHUB_PROMPTS_CONTENTS_API_URL =
   "https://api.github.com/repos/shbernal/pdfanki/contents/cli/prompts?ref=master";
 const GITHUB_ACCEPT_HEADER = "application/vnd.github+json";
 const GITHUB_USER_AGENT = "@shbernal/pdfanki-cli";
-
-interface RemotePromptDirectoryEntry {
-  name?: unknown;
-  type?: unknown;
-  download_url?: unknown;
-}
 
 export interface PromptSummary {
   name: string;
@@ -34,18 +29,35 @@ interface InstallRemotePromptResult {
   overwritten: boolean;
 }
 
-function isMarkdownPromptEntry(entry: RemotePromptDirectoryEntry): entry is {
+/** The name a GitHub contents-API entry carries, if it is a markdown file. */
+function markdownFileName(entry: unknown): string | undefined {
+  if (!entry || typeof entry !== "object") {
+    return undefined;
+  }
+
+  const type: unknown = "type" in entry ? entry.type : undefined;
+  const name: unknown = "name" in entry ? entry.name : undefined;
+  if (type !== "file" || typeof name !== "string" || !/\.md$/i.test(name)) {
+    return undefined;
+  }
+
+  return name;
+}
+
+function isMarkdownPromptEntry(entry: unknown): entry is {
   name: string;
   type: "file";
   download_url: string;
 } {
-  return (
-    entry.type === "file" &&
-    typeof entry.name === "string" &&
-    /\.md$/i.test(entry.name) &&
-    typeof entry.download_url === "string" &&
-    entry.download_url.length > 0
-  );
+  if (!markdownFileName(entry) || !entry || typeof entry !== "object") {
+    return false;
+  }
+
+  if (!("download_url" in entry)) {
+    return false;
+  }
+
+  return typeof entry.download_url === "string" && entry.download_url.length > 0;
 }
 
 function buildGitHubHeaders(): Record<string, string> {
@@ -55,13 +67,17 @@ function buildGitHubHeaders(): Record<string, string> {
   };
 }
 
+const HTTP_FORBIDDEN = 403;
+const MS_PER_SECOND = 1000;
+const MAX_ERROR_DETAIL_LENGTH = 200;
+
 function buildGitHubApiErrorMessage(response: Response, details: string): string {
   const base = `Failed to fetch remote prompts from GitHub (${response.status} ${response.statusText}).`;
   const remaining = response.headers.get("x-ratelimit-remaining");
-  if (response.status === 403 && remaining === "0") {
+  if (response.status === HTTP_FORBIDDEN && remaining === "0") {
     const reset = response.headers.get("x-ratelimit-reset");
     if (reset) {
-      const resetAt = new Date(Number(reset) * 1000);
+      const resetAt = new Date(Number(reset) * MS_PER_SECOND);
       if (!Number.isNaN(resetAt.getTime())) {
         return `${base} GitHub API rate limit reached. Reset at ${resetAt.toISOString()}.`;
       }
@@ -71,7 +87,7 @@ function buildGitHubApiErrorMessage(response: Response, details: string): string
   }
 
   if (details.length > 0) {
-    return `${base} ${details.slice(0, 200)}`;
+    return `${base} ${details.slice(0, MAX_ERROR_DETAIL_LENGTH)}`;
   }
 
   return base;
@@ -83,19 +99,22 @@ async function fetchRemotePromptDirectory(): Promise<RemotePromptSummary[]> {
   });
 
   if (!response.ok) {
-    const details = (await response.text()).trim();
+    const body = await response.text();
+    const details = body.trim();
     throw new Error(buildGitHubApiErrorMessage(response, details));
   }
 
-  const payload = await response.json();
+  const payload: unknown = await response.json();
   if (!Array.isArray(payload)) {
-    throw new Error("Failed to fetch remote prompts from GitHub: unexpected API response shape.");
+    throw new TypeError(
+      "Failed to fetch remote prompts from GitHub: unexpected API response shape.",
+    );
   }
 
-  return payload
-    .map((entry) => entry as RemotePromptDirectoryEntry)
-    .filter((entry) => entry.type === "file" && typeof entry.name === "string")
-    .filter((entry) => /\.md$/i.test(entry.name as string))
+  const entries: unknown[] = payload;
+
+  return entries
+    .filter((entry) => markdownFileName(entry) !== undefined)
     .map((entry) => {
       if (!isMarkdownPromptEntry(entry)) {
         throw new Error(
@@ -119,8 +138,9 @@ async function fetchRemotePromptContents(name: string, downloadUrl: string): Pro
   });
 
   if (!response.ok) {
-    const details = (await response.text()).trim();
-    const suffix = details.length > 0 ? ` ${details.slice(0, 200)}` : "";
+    const body = await response.text();
+    const details = body.trim();
+    const suffix = details.length > 0 ? ` ${details.slice(0, MAX_ERROR_DETAIL_LENGTH)}` : "";
     throw new Error(
       `Failed to download remote prompt "${name}" (${response.status} ${response.statusText}).${suffix}`,
     );
@@ -134,7 +154,7 @@ async function checkPromptExists(path: string): Promise<boolean> {
     await fs.access(path);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isNotFoundError(error)) {
       return false;
     }
 

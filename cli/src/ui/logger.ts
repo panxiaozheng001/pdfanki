@@ -3,13 +3,13 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 type ColorName = "dim" | "cyan" | "green" | "yellow" | "red" | "gray" | "reset";
 
 const ANSI: Record<ColorName, string> = {
-  dim: "\u001b[2m",
-  cyan: "\u001b[36m",
-  green: "\u001b[32m",
-  yellow: "\u001b[33m",
-  red: "\u001b[31m",
-  gray: "\u001b[90m",
-  reset: "\u001b[0m",
+  dim: "\u001B[2m",
+  cyan: "\u001B[36m",
+  green: "\u001B[32m",
+  yellow: "\u001B[33m",
+  red: "\u001B[31m",
+  gray: "\u001B[90m",
+  reset: "\u001B[0m",
 };
 
 const LEVEL_WEIGHT: Record<LogLevel, number> = {
@@ -27,7 +27,9 @@ export interface LoggerOptions {
 }
 
 function paint(text: string, color: ColorName, enabled: boolean): string {
-  if (!enabled || color === "reset") return text;
+  if (!enabled || color === "reset") {
+    return text;
+  }
   return `${ANSI[color]}${text}${ANSI.reset}`;
 }
 
@@ -49,34 +51,37 @@ export function createLogger(options: LoggerOptions): Logger {
     return LEVEL_WEIGHT[target] >= currentWeight;
   }
 
-  function write(
-    stream: NodeJS.WriteStream,
-    targetLevel: LogLevel,
-    prefix: string,
-    message: string,
-    color: ColorName,
-  ) {
-    if (!shouldLog(targetLevel)) return;
-    const formattedPrefix = paint(prefix, color, useColor);
-    stream.write(`${formattedPrefix} ${message}\n`);
+  function write(entry: {
+    stream: NodeJS.WriteStream;
+    targetLevel: LogLevel;
+    prefix: string;
+    message: string;
+    color: ColorName;
+  }) {
+    if (!shouldLog(entry.targetLevel)) {
+      return;
+    }
+
+    const formattedPrefix = paint(entry.prefix, entry.color, useColor);
+    entry.stream.write(`${formattedPrefix} ${entry.message}\n`);
   }
 
   return {
     isDebugEnabled: shouldLog("debug"),
     debug(message: string) {
-      write(stdout, "debug", "[dbg]", message, "gray");
+      write({ stream: stdout, targetLevel: "debug", prefix: "[dbg]", message, color: "gray" });
     },
     info(message: string) {
-      write(stdout, "info", "[i]", message, "cyan");
+      write({ stream: stdout, targetLevel: "info", prefix: "[i]", message, color: "cyan" });
     },
     success(message: string) {
-      write(stdout, "info", "[ok]", message, "green");
+      write({ stream: stdout, targetLevel: "info", prefix: "[ok]", message, color: "green" });
     },
     warn(message: string) {
-      write(stderr, "warn", "[WARNING]", message, "yellow");
+      write({ stream: stderr, targetLevel: "warn", prefix: "[WARNING]", message, color: "yellow" });
     },
     error(message: string) {
-      write(stderr, "error", "[err]", message, "red");
+      write({ stream: stderr, targetLevel: "error", prefix: "[err]", message, color: "red" });
     },
   };
 }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 // lib/epubJsonUtils.js
 import EPub, { type Metadata } from "epub";
 
+import { describeError } from "./describeError.js";
 import { DEFAULT_EPUB_TITLE_FILTERS, type EpubTitleFilter } from "./epubFilters.js";
 import type { BookJson } from "./types/flashcards.js";
 
@@ -56,26 +57,19 @@ interface SourceFile {
   name: string;
 }
 
-/** What was thrown, said in one line. `catch` hands over `unknown`, not an `Error`. */
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return typeof error === "string" ? error : "unknown error";
-}
-
 /** A chapter title as the EPUB spells it, or a generated stand-in. */
 function chapterTitleOf(title: unknown, chapterNumber: number): string {
   return typeof title === "string" && title.trim().length > 0 ? title : `Section ${chapterNumber}`;
 }
 
-const ANSI_BRIGHT_BLUE = "\u001b[94m";
-const ANSI_BRIGHT_GREEN = "\u001b[92m";
-const ANSI_BRIGHT_RED = "\u001b[91m";
-const ANSI_BRIGHT_YELLOW = "\u001b[93m";
-const ANSI_UNDERLINE = "\u001b[4m";
-const ANSI_RESET = "\u001b[0m";
+const DEFAULT_PREVIEW_CHARS = 120;
+
+const ANSI_BRIGHT_BLUE = "\u001B[94m";
+const ANSI_BRIGHT_GREEN = "\u001B[92m";
+const ANSI_BRIGHT_RED = "\u001B[91m";
+const ANSI_BRIGHT_YELLOW = "\u001B[93m";
+const ANSI_UNDERLINE = "\u001B[4m";
+const ANSI_RESET = "\u001B[0m";
 
 function canUseColor(): boolean {
   return process.stdout.isTTY && process.env.NO_COLOR !== "1";
@@ -90,9 +84,11 @@ function styleText(
   } = {},
 ): string {
   const useColor = options.useColor === true;
-  const color = options.color;
+  const { color } = options;
   const underline = options.underline === true;
-  if (!useColor) return text;
+  if (!useColor) {
+    return text;
+  }
 
   let prefix = "";
   if (underline) {
@@ -108,14 +104,16 @@ function styleText(
     prefix += ANSI_BRIGHT_YELLOW;
   }
 
-  if (!prefix) return text;
+  if (!prefix) {
+    return text;
+  }
   return `${prefix}${text}${ANSI_RESET}`;
 }
 
 function formatNumberGroups(value: number): string {
   const sign = value < 0 ? "-" : "";
   const absValue = Math.abs(Math.trunc(value));
-  const grouped = absValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const grouped = absValue.toString().replaceAll(/\B(?=(\d{3})+(?!\d))/g, " ");
   return `${sign}${grouped}`;
 }
 
@@ -125,17 +123,17 @@ function formatChapterLabel(chapterNumber: number, totalChapters: number): strin
 }
 
 function parseSectionSelectionValue(value: unknown, label: string): number | undefined {
-  if (typeof value === "undefined" || value === null) {
+  if (value === undefined || value === null) {
     return undefined;
   }
 
   if (typeof value !== "number" && typeof value !== "string") {
-    throw new Error(`${label} must be an integer`);
+    throw new TypeError(`${label} must be an integer`);
   }
 
   const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
   if (!Number.isInteger(parsed)) {
-    throw new Error(`${label} must be an integer`);
+    throw new TypeError(`${label} must be an integer`);
   }
 
   return parsed;
@@ -184,7 +182,7 @@ export function parseEpubWithEpubLib(
   titleFilters: readonly EpubTitleFilter[] = DEFAULT_EPUB_TITLE_FILTERS,
   minChars?: number,
   preview = false,
-  previewChars = 120,
+  previewChars = DEFAULT_PREVIEW_CHARS,
   excludedChapters?: ReadonlySet<number>,
   startChapter?: unknown,
   endChapter?: unknown,
@@ -329,7 +327,7 @@ export function parseEpubWithEpubLib(
       return {
         metadata: epub.metadata,
         chapters: extractedChapters,
-        totalChapters: totalChapters,
+        totalChapters,
       };
     } catch (error) {
       throw new Error(`Failed to parse EPUB: ${describeError(error)}`, { cause: error });
@@ -435,7 +433,7 @@ export function transformEpubResult(
 
   return {
     metadata: transformedMetadata,
-    content: content,
+    content,
   };
 }
 
@@ -448,8 +446,8 @@ function getChapterText(epub: EPub, chapterId: string): Promise<string> {
 
 function buildPreviewText(text: string, previewChars: number): string {
   const normalizedPreviewChars =
-    Number.isInteger(previewChars) && previewChars > 0 ? previewChars : 120;
-  const normalizedText = text.replace(/\s+/g, " ").trim();
+    Number.isInteger(previewChars) && previewChars > 0 ? previewChars : DEFAULT_PREVIEW_CHARS;
+  const normalizedText = text.replaceAll(/\s+/g, " ").trim();
 
   if (!normalizedText) {
     return "[empty]";
@@ -466,20 +464,22 @@ function buildPreviewText(text: string, previewChars: number): string {
  * Helper function to clean HTML and extract plain text
  */
 function cleanHtmlText(htmlContent: string): string {
-  if (!htmlContent) return "";
+  if (!htmlContent) {
+    return "";
+  }
 
   // Remove HTML tags and decode entities
   const text = htmlContent
-    .replace(/<script[^>]*>.*?<\/script>/gi, "") // Remove scripts
-    .replace(/<style[^>]*>.*?<\/style>/gi, "") // Remove styles
-    .replace(/<[^>]*>/g, "") // Remove HTML tags
-    .replace(/&nbsp;/g, " ") // Replace non-breaking spaces
-    .replace(/&amp;/g, "&") // Replace HTML entities
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ") // Normalize whitespace
+    .replaceAll(/<script[^>]*>.*?<\/script>/gi, "") // Remove scripts
+    .replaceAll(/<style[^>]*>.*?<\/style>/gi, "") // Remove styles
+    .replaceAll(/<[^>]*>/g, "") // Remove HTML tags
+    .replaceAll("&nbsp;", " ") // Replace non-breaking spaces
+    .replaceAll("&amp;", "&") // Replace HTML entities
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll(/\s+/g, " ") // Normalize whitespace
     .trim();
 
   return text;
@@ -493,11 +493,15 @@ function buildTitleMatchers(filters: readonly EpubTitleFilter[] | undefined): Ti
   const matchers: TitleMatcher[] = [];
 
   for (const rule of rules) {
-    if (!rule) continue;
+    if (!rule) {
+      continue;
+    }
 
     if (rule.type === "string" && typeof rule.value === "string") {
       const normalized = rule.value.trim().toLowerCase();
-      if (!normalized) continue;
+      if (!normalized) {
+        continue;
+      }
       matchers.push({
         reason: rule.value,
         test: (titleLower) => titleLower === normalized,
@@ -570,7 +574,9 @@ function shouldFilterContent(
   }
 
   // Check if title matches filtering patterns (case insensitive)
-  if (!title) return { shouldFilter: false };
+  if (!title) {
+    return { shouldFilter: false };
+  }
 
   const titleLower = title.toLowerCase().trim();
 

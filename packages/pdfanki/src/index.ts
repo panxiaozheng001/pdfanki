@@ -3,4 +3,4 @@ export * from "./epubJsonUtils.js";
 export * from "./jsonSectionManagement.js";
 export * from "./textTransformation.js";
 export * from "./formatFileSize.js";
-export * from "./types/flashcards.js";
+export type * from "./types/flashcards.js";

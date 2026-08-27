@@ -4,8 +4,7 @@ import { basename, extname } from "node:path";
 import { DEFAULT_EPUB_TITLE_FILTERS, type EpubFilters } from "./epubFilters.js";
 import { parseEpubWithEpubLib, transformEpubResult } from "./epubJsonUtils.js";
 import { parsePdfWithPdfParse, transformPdfParseResult } from "./pdfJsonUtils.js";
-import type { SupportedProvider } from "./providers.js";
-import { bookJsonToPlainText } from "./providers.js";
+import { bookJsonToPlainText, type SupportedProvider } from "./providers.js";
 import { cleanTransformedResult } from "./textTransformation.js";
 import type { BookJson, IndexEntry } from "./types/flashcards.js";
 
@@ -36,20 +35,32 @@ export interface ConvertFileResult {
 }
 
 function normalizeType(type?: string): SupportedFileType | undefined {
-  if (!type) return undefined;
+  if (!type) {
+    return undefined;
+  }
   const value = type.toLowerCase();
-  if (value === "pdf" || value === "application/pdf") return "pdf";
-  if (value === "epub" || value === "application/epub+zip") return "epub";
+  if (value === "pdf" || value === "application/pdf") {
+    return "pdf";
+  }
+  if (value === "epub" || value === "application/epub+zip") {
+    return "epub";
+  }
   return undefined;
 }
 
 function inferFileType(inputPath: string, provided?: string): SupportedFileType {
   const typeFromArg = normalizeType(provided);
-  if (typeFromArg) return typeFromArg;
+  if (typeFromArg) {
+    return typeFromArg;
+  }
 
   const ext = extname(inputPath).toLowerCase();
-  if (ext === ".pdf") return "pdf";
-  if (ext === ".epub") return "epub";
+  if (ext === ".pdf") {
+    return "pdf";
+  }
+  if (ext === ".epub") {
+    return "epub";
+  }
 
   throw new Error(
     "Unable to infer file type. Please pass --type pdf|epub or use a .pdf/.epub file extension.",
@@ -61,12 +72,14 @@ function normalizeIndexTitle(
   sourceLabel: string,
   entryNumber: number,
 ): string | undefined {
-  if (typeof value === "undefined" || value === null) {
+  if (value === undefined || value === null) {
     return undefined;
   }
 
   if (typeof value !== "string") {
-    throw new Error(`${sourceLabel} entry ${entryNumber} has invalid "title"; expected a string.`);
+    throw new TypeError(
+      `${sourceLabel} entry ${entryNumber} has invalid "title"; expected a string.`,
+    );
   }
 
   const trimmed = value.trim();
@@ -102,7 +115,9 @@ function validateIndexEntries(entries: IndexEntry[], sourceLabel: string): Index
     }
 
     const previous = entries[i - 1];
-    if (!previous) continue;
+    if (!previous) {
+      continue;
+    }
 
     if (current.start < previous.start) {
       throw new Error(`${sourceLabel} entries must be sorted by start page in ascending order.`);
@@ -126,10 +141,23 @@ function normalizeIndexEntries(rawEntries: unknown[], sourceLabel: string): Inde
       );
     }
 
-    const entryRecord = entry as Record<string, unknown>;
-    const start = normalizeIndexPage(entryRecord.start, "start", sourceLabel, index + 1);
-    const end = normalizeIndexPage(entryRecord.end, "end", sourceLabel, index + 1);
-    const title = normalizeIndexTitle(entryRecord.title, sourceLabel, index + 1);
+    const start = normalizeIndexPage(
+      "start" in entry ? entry.start : undefined,
+      "start",
+      sourceLabel,
+      index + 1,
+    );
+    const end = normalizeIndexPage(
+      "end" in entry ? entry.end : undefined,
+      "end",
+      sourceLabel,
+      index + 1,
+    );
+    const title = normalizeIndexTitle(
+      "title" in entry ? entry.title : undefined,
+      sourceLabel,
+      index + 1,
+    );
 
     return title ? { start, end, title } : { start, end };
   });
@@ -138,20 +166,25 @@ function normalizeIndexEntries(rawEntries: unknown[], sourceLabel: string): Inde
 }
 
 async function loadIndexFile(indexPath?: string): Promise<IndexEntry[] | null> {
-  if (!indexPath) return null;
-
-  const raw = await fs.readFile(indexPath, "utf8");
-  const parsed = JSON.parse(raw);
-
-  if (!Array.isArray(parsed)) {
-    throw new Error("Index file must be a JSON array of chapters");
+  if (!indexPath) {
+    return null;
   }
 
-  return normalizeIndexEntries(parsed, "Index file");
+  const raw = await fs.readFile(indexPath, "utf8");
+  const parsed: unknown = JSON.parse(raw);
+
+  if (!Array.isArray(parsed)) {
+    throw new TypeError("Index file must be a JSON array of chapters");
+  }
+
+  const entries: unknown[] = parsed;
+  return normalizeIndexEntries(entries, "Index file");
 }
 
 function parseIndexRanges(indexRanges?: string): IndexEntry[] | null {
-  if (typeof indexRanges === "undefined") return null;
+  if (indexRanges === undefined) {
+    return null;
+  }
 
   const trimmed = indexRanges.trim();
   if (!trimmed) {
@@ -186,11 +219,11 @@ async function resolveIndexEntries(options: {
 }): Promise<IndexEntry[] | null> {
   const { indexPath, indexRanges } = options;
 
-  if (indexPath && typeof indexRanges !== "undefined") {
+  if (indexPath && indexRanges !== undefined) {
     throw new Error("Use either indexPath or indexRanges, not both.");
   }
 
-  if (typeof indexRanges !== "undefined") {
+  if (indexRanges !== undefined) {
     return parseIndexRanges(indexRanges);
   }
 
@@ -198,7 +231,7 @@ async function resolveIndexEntries(options: {
 }
 
 function parseExcludeChapters(value?: string): ReadonlySet<number> | undefined {
-  if (typeof value === "undefined") {
+  if (value === undefined) {
     return undefined;
   }
 
@@ -310,14 +343,11 @@ export async function convertFileFromPath(options: ConvertFileOptions): Promise<
     throw new Error("inputPath is required");
   }
 
-  if (
-    typeof startChapter !== "undefined" &&
-    (!Number.isInteger(startChapter) || startChapter <= 0)
-  ) {
+  if (startChapter !== undefined && (!Number.isInteger(startChapter) || startChapter <= 0)) {
     throw new Error("startChapter must be a positive integer");
   }
 
-  if (typeof endChapter !== "undefined" && (!Number.isInteger(endChapter) || endChapter <= 0)) {
+  if (endChapter !== undefined && (!Number.isInteger(endChapter) || endChapter <= 0)) {
     throw new Error("endChapter must be a positive integer");
   }
 
@@ -326,12 +356,8 @@ export async function convertFileFromPath(options: ConvertFileOptions): Promise<
   const originalFile = { name: basename(inputPath) };
 
   if (fileType === "pdf") {
-    if (
-      typeof startChapter !== "undefined" ||
-      typeof endChapter !== "undefined" ||
-      typeof excludeChapters !== "undefined"
-    ) {
-      throw new Error(
+    if (startChapter !== undefined || endChapter !== undefined || excludeChapters !== undefined) {
+      throw new TypeError(
         "PDF extraction does not support section selection. Use --index or --index-ranges for PDFs.",
       );
     }

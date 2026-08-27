@@ -130,7 +130,7 @@ test("canUndo reflects whether the stack holds anything", () => {
   assert.equal(canUndo(["a"]), true);
   assert.equal(canUndo([]), false);
   assert.equal(canUndo(null), false);
-  assert.equal(canUndo(undefined), false);
+  assert.equal(canUndo(), false);
 });
 
 test("validateJsonStructure accepts a well-formed book", () => {

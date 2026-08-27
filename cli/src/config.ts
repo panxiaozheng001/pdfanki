@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { isNotFoundError } from "./errors.js";
 import {
   DEFAULT_EPUB_TITLE_FILTERS,
   type EpubTitleFilter,
@@ -135,7 +136,9 @@ function mergeUniqueTitleFilters(
   for (const group of groups) {
     for (const filter of group ?? []) {
       const key = JSON.stringify(filter);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       merged.push(filter);
     }
@@ -181,9 +184,9 @@ export async function ensureConfig(): Promise<ConfigPaths> {
   await fs.mkdir(paths.dir, { recursive: true });
   await fs.mkdir(paths.promptsDir, { recursive: true });
 
-  await ensureFile(paths.settings, JSON.stringify(DEFAULT_SETTINGS, null, 2) + "\n");
+  await ensureFile(paths.settings, `${JSON.stringify(DEFAULT_SETTINGS, null, 2)}\n`);
 
-  await ensureFile(paths.defaultPrompt, DEFAULT_PROMPT_CONTENT + "\n");
+  await ensureFile(paths.defaultPrompt, `${DEFAULT_PROMPT_CONTENT}\n`);
 
   return paths;
 }
@@ -278,32 +281,46 @@ export function sanitizePromptName(rawName?: string): string {
   return name;
 }
 
+function isCodexReasoningEffort(value: string): value is CodexReasoningEffort {
+  return CODEX_REASONING_EFFORTS.some((effort) => effort === value);
+}
+
 export function normalizeCodexReasoningEffort(
   value: unknown,
   sourceLabel: string,
 ): CodexReasoningEffort | undefined {
-  if (typeof value === "undefined" || value === null) return undefined;
+  if (value === undefined || value === null) {
+    return undefined;
+  }
   if (typeof value !== "string") {
-    throw new Error(`${sourceLabel} must be one of: ${CODEX_REASONING_EFFORTS.join(", ")}.`);
+    throw new TypeError(`${sourceLabel} must be one of: ${CODEX_REASONING_EFFORTS.join(", ")}.`);
   }
 
   const normalized = value.trim().toLowerCase();
-  if (CODEX_REASONING_EFFORTS.includes(normalized as CodexReasoningEffort)) {
-    return normalized as CodexReasoningEffort;
+  if (isCodexReasoningEffort(normalized)) {
+    return normalized;
   }
 
   throw new Error(`${sourceLabel} must be one of: ${CODEX_REASONING_EFFORTS.join(", ")}.`);
 }
 
 export function normalizeCodexProfile(value: unknown, sourceLabel: string): string | undefined {
-  if (typeof value === "undefined" || value === null) return undefined;
+  if (value === undefined || value === null) {
+    return undefined;
+  }
   if (typeof value !== "string") {
-    throw new Error(`${sourceLabel} must contain only letters, numbers, hyphens, or underscores.`);
+    throw new TypeError(
+      `${sourceLabel} must contain only letters, numbers, hyphens, or underscores.`,
+    );
   }
 
   const normalized = value.trim();
-  if (normalized.length === 0) return undefined;
-  if (CODEX_PROFILE_PATTERN.test(normalized)) return normalized;
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  if (CODEX_PROFILE_PATTERN.test(normalized)) {
+    return normalized;
+  }
 
   throw new Error(`${sourceLabel} must contain only letters, numbers, hyphens, or underscores.`);
 }
@@ -321,7 +338,7 @@ export async function loadPrompt(rawName?: string): Promise<{
     const contents = await fs.readFile(promptPath, "utf8");
     return { name, contents, path: promptPath };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isNotFoundError(error)) {
       throw new Error(
         `Prompt "${name}" not found. Expected at ${promptPath}. Create it under ${paths.promptsDir}.`,
         { cause: error },

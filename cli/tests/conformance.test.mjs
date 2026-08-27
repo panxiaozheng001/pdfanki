@@ -45,7 +45,10 @@ const cardRegion = (markdown) => {
 };
 
 /** What pdfanki would write for these cards, which is always canonical form. */
-const written = (markdown) => parseSectionCards(markdown).map(renderCard).join("\n\n");
+const written = (markdown) =>
+  parseSectionCards(markdown)
+    .map((card) => renderCard(card))
+    .join("\n\n");
 
 const rejects = (markdown) => {
   try {
@@ -115,7 +118,7 @@ test("valid/no-blank-line-after-heading comes back out canonical", () => {
   const output = written(region);
 
   assert.notEqual(output, region);
-  assert.equal(output, region.replace(/^(## .*)$/gm, "$1\n"));
+  assert.equal(output, region.replaceAll(/^(## .*)$/gm, "$1\n"));
 });
 
 test("valid/no-blank-lines-around-separator comes back out canonical", () => {

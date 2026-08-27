@@ -5,9 +5,11 @@ const input = await new Promise((resolve, reject) => {
   let value = "";
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk) => {
-    value += chunk;
+    value += String(chunk);
   });
-  process.stdin.on("end", () => resolve(value));
+  process.stdin.on("end", () => {
+    resolve(value);
+  });
   process.stdin.on("error", reject);
 });
 
@@ -31,7 +33,7 @@ for (const required of [
 
 function optionValue(name) {
   const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
+  return index === -1 ? undefined : args[index + 1];
 }
 
 function configValues() {

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 /*
  * The format rules are the same in every prompt, and they were four copies that had
@@ -24,7 +23,7 @@ const SHARED_FORMAT_RULES = [
   "- Never emit a `#` heading; the deck title is added separately, and a `#` here would end the card above it",
 ];
 
-const PROMPTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "prompts");
+const PROMPTS_DIR = path.join(import.meta.dirname, "..", "prompts");
 
 const promptFiles = readdirSync(PROMPTS_DIR).filter((name) => name.endsWith(".md"));
 

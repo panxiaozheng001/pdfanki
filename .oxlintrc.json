@@ -4,7 +4,9 @@
   "categories": {
     "correctness": "error",
     "suspicious": "error",
-    "perf": "error"
+    "perf": "error",
+    "pedantic": "error",
+    "style": "error"
   },
   "ignorePatterns": [
     "dist/",
@@ -58,13 +60,6 @@
     // would be wrong in all of them, not merely faster.
     "no-await-in-loop": "off",
 
-    // Nothing here is JSON.parse'd and then asserted for fun: the PDF and EPUB
-    // payloads arrive untyped and `as` is the only tool available while
-    // `tsconfig.base.json` sets `strict: false`. Turning this on is gated on
-    // that flag, not on a decision about the rule. Provisional: re-measure once
-    // `strict` is on and delete this if the count is workable.
-    "typescript/no-unsafe-type-assertion": "off",
-
     // The reindex in `packages/pdfanki/src/server.ts` copies each section to
     // renumber it. `Object.assign` onto the original would mutate the caller's
     // book, which is the bug the copy exists to avoid, and a handful of sections
@@ -82,16 +77,280 @@
 
     // The default export of `epub` is the `EPub` class; the package also names
     // it. Importing it under any other name would describe it worse.
-    "import/no-named-as-default": "off"
+    "import/no-named-as-default": "off",
+
+    // Conventions shared with the two sibling repos. Each is a decision they
+    // already made and this one holds to; the reasons are theirs as much as ours.
+
+    // oxlint defaults `one-var` to "always", which would collapse every run of
+    // consecutive declarations into one comma-chained statement. One binding per
+    // statement is the convention here, so the rule stays on pointed at it.
+    "one-var": ["error", "never"],
+
+    // 0, 1 and -1 are the empty/first/sentinel values that show up in any
+    // scanner and carry no meaning a constant could add. Everything else gets
+    // a name.
+    // 0, 1 and -1 are the empty/first/sentinel values that show up in any
+    // scanner and carry no meaning a constant could add. 2 is here for a
+    // narrower reason: every remaining one is a width or a precision inside a
+    // format call - `toFixed(2)`, `padStart(2, "0")`, a two-space JSON indent -
+    // where a named constant would sit between a formatter and its argument.
+    // Everything that is a quantity gets a name.
+    "no-magic-numbers": [
+      "error",
+      { "ignore": [-1, 0, 1, 2], "ignoreArrayIndexes": true, "ignoreDefaultValues": true }
+    ],
+
+    // These are Node packages: the CLI reads files and the library resolves
+    // paths. The rule exists to keep browser bundles free of builtins, which is
+    // the opposite of the target here.
+    "import/no-nodejs-modules": "off",
+
+    // Both packages publish named exports rather than a single default. That is
+    // the API decision, not something a lint fix gets to make.
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+
+    // Types and helpers are declared next to the code they describe, so exports
+    // are interleaved rather than gathered at the bottom. Both rules only
+    // relocate existing statements; neither changes what a module exposes.
+    "import/group-exports": "off",
+    "import/exports-last": "off",
+
+    // `consistent-type-imports` above is set to `inline-type-imports`; this rule
+    // demands the opposite. Leaving both on makes the two fixers undo each other.
+    "import/consistent-type-specifier-style": "off",
+
+    // `null` is what the extractors write into the deck JSON for a field the
+    // document does not carry - `creator`, `isbn`, `pdfVersion`. `undefined` is
+    // not valid JSON, so JSON.stringify would drop the key and lose the
+    // distinction between "the PDF has no creator" and "nobody looked".
+    "unicorn/no-null": "off",
+
+    // Rewriting a two-branch value selection as a statement forces a `let` that
+    // `init-declarations` then objects to, and adds a statement to functions
+    // this config caps. The expression form wins because it is the one the
+    // other rules are happy with.
+    "no-ternary": "off",
+
+    // Every pattern here has one or two groups read on the line below it,
+    // positionally and immediately. A name would buy nothing at that distance.
+    "prefer-named-capture-group": "off",
+
+    // The deck JSON is emitted output, not formatting: `metadata` is written in
+    // the order a reader wants it - title, author, then provenance - and the
+    // section objects mirror the order of the extractor that fills them.
+    // Sorting either alphabetically changes the file this package produces.
+    "sort-keys": "off",
+
+    // Filenames here are camelCase and have been since the package existed
+    // (`pdfJsonUtils`, `epubJsonUtils`, `jsonSectionManagement`). The rule is on
+    // to keep that consistent rather than to impose unicorn's kebab default,
+    // which would rename twenty files and every import of them.
+    "unicorn/filename-case": ["error", { "case": "camelCase" }],
+
+    // Top-level helpers are `function` declarations throughout, which is what
+    // lets them be read in the order the module tells its story rather than the
+    // order a `const` would force. Callbacks stay arrows.
+    "func-style": ["error", "declaration", { "allowArrowFunctions": true }],
+
+    // A budget rather than a ceiling, and raised from the default ten
+    // deliberately. The functions that sit near it are the ones that read a
+    // document end to end: a PDF's info dictionary, an EPUB's chapter list, a
+    // deck's sections. Each has one job and no seam inside it, so splitting one
+    // to fit ten would trade a readable function for a pair of halves with no
+    // name of their own. Anything past this has earned a second look.
+    "max-statements": ["error", 25],
+
+    // The regexes here are scanner-grade and several are compiled at runtime
+    // from user configuration - `new RegExp(rule.pattern, rule.flags)` in the
+    // EPUB title filters, where the flags come from settings.json and the rule
+    // cannot reach them. Adding `u` to the literals would leave that half
+    // untouched while making the identifier-class escapes in the others throw.
+    "require-unicode-regexp": "off",
+
+    // Truthiness is the design here, not an oversight: an empty PDF title, an
+    // empty section and a missing section are all "nothing useful", and the
+    // `||` chains that fall back through them are load-bearing. Requiring an
+    // explicit comparison at each would restate that in ninety places without
+    // changing what any of them decide.
+    "typescript/strict-boolean-expressions": "off",
+
+    // Comments here wrap across lines and start with the thing they name: a
+    // module path, a library (`pdf.js`), a function (`normalizeType`). The
+    // rule's fixer capitalizes all of those, and a continuation line with them,
+    // which is how `pdf.js` becomes `Pdf.js` and a wrapped sentence gains a
+    // capital in its middle.
+    "capitalized-comments": "off",
+
+    // `||` on a primitive is a deliberate fallback here: an empty PDF title must
+    // still fall through to the filename, so `??` would change behavior rather
+    // than tidy it. The rule stays on for object operands, where `||` is a
+    // genuine bug risk.
+    "typescript/prefer-nullish-coalescing": [
+      "error",
+      { "ignorePrimitives": { "string": true, "number": true, "boolean": true } }
+    ],
+
+    // These functions are `async` because their contract is a promise: the
+    // provider dispatch validates its arguments and throws, and the yargs
+    // handlers hand a promise back to the parser. Dropping the keyword turns
+    // that `throw` into a synchronous exception at a call site that only
+    // awaits, which is a behavior change in a published API.
+    "require-await": "off",
+    "typescript/require-await": "off",
+
+    // Every one is a guard at the top of an extraction loop: a chapter outside
+    // the selected range, a page with no text, an entry a filter dropped. The
+    // alternative is to invert each into an `if` that wraps the rest of the
+    // body, which deepens the nesting `max-depth` is measuring.
+    "no-continue": "off",
+
+    // What both rules find is a flat `a ? x : b ? y : z` chain, which is this
+    // codebase's lookup table: pick an extension for a target kind, a colour for
+    // a level, a label for a state. `no-ternary` is off above for the same
+    // reason - the statement form these want costs a `let` and an extra branch
+    // to say the same thing.
+    "no-nested-ternary": "off",
+    "unicorn/no-nested-ternary": "off",
+
+    // Wrapping a callback API is exactly what the constructor is for, and all
+    // four sites do it: a child process's exit, a stdin stream's end. There is
+    // no promise-returning form of those to prefer instead.
+    "promise/avoid-new": "off",
+
+    // `Number.parseInt(value, 10)` says "read an integer in base ten" in one
+    // call. `Math.trunc(Number(value))` needs two to say it, and for the
+    // `--start-section` flag it would also turn a lenient parse into a strict
+    // one: a behavior change wearing a lint fix's clothes.
+    "unicorn/prefer-number-coercion": "off",
+
+    // The two sites are `||` chains that settle on a page count, where `.length`
+    // is the last fallback value rather than a condition. `> 0` would replace
+    // the count with a boolean.
+    "unicorn/explicit-length-check": "off",
+
+    // `packages/pdfanki/src/server.ts` is a facade: it imports these names to
+    // use them and re-exports them as its public surface. `export ... from` does
+    // not create a local binding, so following the rule means keeping the import
+    // as well and naming each export twice.
+    "unicorn/prefer-export-from": "off",
+
+    // Short names here are either the PDF's own (`x`, `y`, `T` and `R` are
+    // pdf2json's field names, and renaming them would stop the code matching
+    // what the parser emits) or a loop counter. Everything the package names
+    // itself is named.
+    "id-length": ["error", { "min": 2, "exceptions": ["x", "y", "T", "R", "i", "j"] }],
+
+    // Budgets rather than ceilings. Each is set where the honest functions in
+    // this repo already sit, so passing one is a decision someone makes rather
+    // than one that happens.
+    "max-params": ["error", 4],
+    "max-depth": ["error", 5],
+    "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 100, "skipBlankLines": true, "skipComments": true }
+    ],
+    "import/max-dependencies": ["error", { "max": 15 }],
+
+    // Both siblings run this rule with an allow list. Here it reports 185 times,
+    // because the data model - `BookJson`, `ContentSection[]`, the undo stack -
+    // is mutable by design and the yargs argv is an object yargs owns. Making
+    // those readonly is a refactor of the whole package, not a lint fix, and it
+    // is written down as `[pdfanki-readonly-params]` rather than lost here.
+    "typescript/prefer-readonly-parameter-types": "off",
+
+    // The text pipelines are tables: a run of `.replace()` calls, each with the
+    // entity or character class it handles named beside it. Moving those onto
+    // their own lines would double the length of the table and put every label
+    // one line away from what it labels.
+    "no-inline-comments": "off"
   },
   "overrides": [
     {
-      // `node:test`'s `test()` returns a promise the runner owns and settles;
-      // a suite that awaited its own cases would serialize them and report
-      // nothing extra. Every call here is a registration, not a pending result.
+      // The yargs wiring. Its option helpers compose by nesting - each `with*`
+      // takes the parser and hands it back - so the builder for one subcommand
+      // is six calls deep on purpose, and the parser is one expression
+      // declaring the whole command surface. Splitting it to fit a line budget
+      // would scatter the thing a reader most wants to see in one piece. The
+      // file's size is already written down as `[pdfanki-index-size]`; this is
+      // not a decision to keep it that way.
+      "files": ["cli/src/index.ts"],
+      "rules": {
+        "unicorn/max-nested-calls": "off",
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+        "max-statements": "off",
+        "max-depth": "off"
+      }
+    },
+    {
+      // The three EPUB extractors take the CLI's flag set positionally, and two
+      // of them are published API: changing the signature to an options object
+      // is a breaking change, not a lint fix. `parseEpubWithEpubLib` also reads
+      // an entire book in one pass, which is why it runs long.
+      "files": ["packages/pdfanki/src/epubJsonUtils.ts"],
+      "rules": {
+        "max-params": "off",
+        "max-lines-per-function": "off",
+        "max-statements": "off"
+      }
+    },
+    {
+      // `loadSettings` reads the user's settings.json and merges it into the
+      // defaults by spreading, so `JSON.parse`'s `any` flows through every
+      // branch of that merge. Narrowing it means replacing the spreads with
+      // field-by-field validation, which stops carrying unknown keys through -
+      // a behavior change, and its own task. Written down as
+      // `[pdfanki-settings-validation]`.
+      "files": ["cli/src/config.ts"],
+      "rules": {
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off"
+      }
+    },
+    {
       "files": ["**/tests/**"],
       "rules": {
-        "typescript/no-floating-promises": "off"
+        // `node:test`'s `test()` returns a promise the runner owns and settles;
+        // a suite that awaited its own cases would serialize them and report
+        // nothing extra. Every call here is a registration, not a pending result.
+        "typescript/no-floating-promises": "off",
+
+        // The suites are `.mjs`, so they are in no TypeScript program:
+        // `allowJs` is off and the built `dist/` they import from is a
+        // gitignored build output that cannot be a typecheck input. Every
+        // import therefore resolves to `any`, and each use of one trips a
+        // `no-unsafe-*` rule reporting a fact about the missing program rather
+        // than about the code. The rules stay on everywhere else.
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+
+        // A `test()` callback is a declarative block, not a function with logic,
+        // so a suite's length and statement count track how many cases it covers.
+        // Splitting a cohesive suite to fit a budget would make the tests worse
+        // rather than smaller.
+        "max-lines": "off",
+        "max-lines-per-function": "off",
+        "max-statements": "off",
+
+        // The suites carry tables of numbers: page ranges, section indexes, the
+        // byte counts a fixture stands for. The rule's escape hatch is a named
+        // `const`, which does not reach inside an array literal or an object
+        // property, so following it would mean one name per page number.
+        "no-magic-numbers": "off",
+
+        // Fixture builders are local to the suite that uses them; hoisting one
+        // to module scope to satisfy the rule separates it from the only cases
+        // that read it.
+        "unicorn/consistent-function-scoping": "off"
       }
     }
   ]

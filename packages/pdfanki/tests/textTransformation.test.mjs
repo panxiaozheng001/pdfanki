@@ -6,7 +6,7 @@ import { cleanExtractedText, cleanTransformedResult, formatFileSize } from "../d
 test("cleanExtractedText returns an empty string for non-string input", () => {
   assert.equal(cleanExtractedText(""), "");
   assert.equal(cleanExtractedText(null), "");
-  assert.equal(cleanExtractedText(undefined), "");
+  assert.equal(cleanExtractedText(), "");
   assert.equal(cleanExtractedText(42), "");
   assert.equal(cleanExtractedText({}), "");
 });
@@ -55,7 +55,7 @@ test("cleanTransformedResult cleans every section without mutating the input", (
 
 test("cleanTransformedResult passes through results without content", () => {
   assert.equal(cleanTransformedResult(null), null);
-  assert.equal(cleanTransformedResult(undefined), undefined);
+  assert.equal(cleanTransformedResult(), undefined);
 
   const noContent = { metadata: { title: "Book" } };
   assert.equal(cleanTransformedResult(noContent), noContent);

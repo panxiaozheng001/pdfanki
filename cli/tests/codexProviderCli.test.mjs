@@ -10,7 +10,7 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const bookPath = fileURLToPath(
   new URL("../../tests/books/public-domain/jekyll-hyde.pg43.epub", import.meta.url),
 );
-const fakeCodexPath = fileURLToPath(new URL("./bin/fake-codex.mjs", import.meta.url));
+const fakeCodexPath = fileURLToPath(new URL("bin/fakeCodex.mjs", import.meta.url));
 
 function runCli(args, env) {
   return new Promise((resolve) => {

@@ -120,7 +120,7 @@ export function getLastDeleted(
   }
 
   // Return the most recently deleted section
-  return deletedSections[deletedSections.length - 1];
+  return deletedSections.at(-1) ?? null;
 }
 
 /**
@@ -191,6 +191,18 @@ export function getUndoSummary(deletedSections: DeletedSection[] | null | undefi
 /**
  * Validate JSON data structure
  */
+/**
+ * Whether a parsed payload is a deck this package can work with. Shares
+ * `validateJsonStructure`'s checks: call that one when the reason matters, this
+ * one when the type does.
+ */
+export function isBookJson(
+  value: unknown,
+  options: { requireMetadata?: boolean; requireTitles?: boolean } = {},
+): value is BookJson {
+  return validateJsonStructure(value, options).isValid;
+}
+
 export function validateJsonStructure(
   jsonData: unknown,
   options: { requireMetadata?: boolean; requireTitles?: boolean } = {},
