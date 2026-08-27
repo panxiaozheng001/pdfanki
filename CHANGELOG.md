@@ -34,6 +34,21 @@ Notable changes per release. Both published packages — `@shbernal/pdfanki` and
   [`ankimd build`](https://www.npmjs.com/package/@ankimd/cli) does all three and is the
   command to reach for on a hand-written deck.
 
+- **Every source file is type-checked under `strict`.** `tsconfig.base.json` had
+  `strict: false` with `strictNullChecks` bolted back on, which left the PDF and EPUB
+  plumbing implicitly `any` — 125 parameters carrying shapes nobody had written down.
+  They are written down now: `PdfParseResult`, `EpubParseResult`, `DeletedSection`, and a
+  `BookMetadata` that names every field the extractors actually write. Nothing about the
+  emitted deck changed; what changed is that the compiler can now see when it would.
+
+### Fixed
+
+- **Failures report what went wrong instead of `undefined`.** Error handlers reached for
+  `.message` through a cast, and the provider SDKs throw their API response rather than
+  an `Error`, so a real failure surfaced as "Conversion failed: undefined". Ten call
+  sites now describe whatever was thrown, and rethrown errors carry the original as
+  `cause`.
+
 ## 0.5.0
 
 The format round. `pdfanki` now conforms as a **producer** to
