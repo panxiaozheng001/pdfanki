@@ -65,6 +65,28 @@ The flat spellings `outputPath`, `defaultProvider`, `defaultPrompt`, `providers`
 and `epubFilters` are still read for files written before the nested sections
 existed. Where both are present the nested one wins.
 
+## Building from markdown you already have
+
+`pdfanki md anki <input>` takes a Flashcard Markdown file rather than a document,
+so no model is involved and no API key is needed.
+
+Images are resolved beside the deck that names them, which is where a relative
+reference in a vault points. A reference to `http` or `https` is only fetched
+when `--remote-media` is passed; without it the image stays in the card as
+written and a warning names it. That is off by default because reaching the
+network is a new capability on a command that was already published, not because
+downloading is discouraged. `--remote-timeout` bounds one download and defaults
+to 10000ms.
+
+Fenced code blocks are coloured at build time for any language Prism is loaded
+with, and a fence with no language or an unknown one is left alone rather than
+guessed at. The theme's stylesheet is folded into the note type's CSS, so the
+colours reach Anki with no media file and nothing to run on the card. Every
+command that writes an `.apkg` gets this, not only `md anki`.
+
+For a directory of decks, a note type of your own, or a choice of code theme,
+[`ankimd build`](https://www.npmjs.com/package/@ankimd/cli) has all three.
+
 ## Usage
 
 - The CLI is organized by source type, then by target type:
@@ -83,6 +105,7 @@ existed. Where both are present the nested one wins.
 - Extract JSON from an EPUB with 200-char previews: `pdfanki epub json file.epub --preview 200`
 - Build an Anki deck from extracted JSON: `pdfanki json anki file.json --provider deepseek --model deepseek-reasoner`
 - Build an Anki deck from existing markdown: `pdfanki md anki deck.md`
+- Same, downloading the images it links to: `pdfanki md anki deck.md --remote-media --remote-timeout 20000`
 - List available prompts from the configured prompts directory: `pdfanki prompts list`
 - Print the current `settings.json` config to stdout: `pdfanki config`
 - Reset the local config directory to defaults: `pdfanki config reset`

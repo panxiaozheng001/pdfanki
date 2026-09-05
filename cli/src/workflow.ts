@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { dirname, join, parse } from "node:path";
 
-import { localMedia, parseMarkdown, renderMarkdown, writeApkg, type Deck } from "@ankimd/core";
+import { parseMarkdown, renderMarkdown, writeApkg, type Deck } from "@ankimd/core";
 
 import {
   flagProvided,
@@ -28,6 +28,8 @@ import {
   resolveGenerationPlan,
   type GenerationArgs,
 } from "./generation.js";
+import { highlight } from "./highlight.js";
+import { createMediaResolver, DEFAULT_TIMEOUT_MS, type MediaOptions } from "./media.js";
 import {
   convertFileFromPath,
   isBookJson,
@@ -36,6 +38,7 @@ import {
   type ConvertFileOptions,
 } from "./pdfankiRuntime.js";
 import { logPdfExtractionSummary } from "./pdfSummary.js";
+import { defaultTemplate } from "./template.js";
 import {
   buildCliUi,
   reportingLogger,
@@ -53,6 +56,10 @@ import type { Logger } from "./ui/logger.js";
  */
 
 const DEFAULT_PREVIEW_CHARS = 120;
+
+/* Not a flag. `ankimd build` exposes `--code-theme`; here every Anki output takes
+   the same default, and a second spelling of it is its own decision. */
+const CODE_THEME = "dark";
 
 type CliSettings = Settings;
 export type WorkflowSourceKind = "pdf" | "epub" | "json" | "md";
@@ -76,6 +83,8 @@ type WorkflowCommandArgs = UiBuildArgs &
     deckTitle?: unknown;
     debug?: unknown;
     dryRun?: unknown;
+    remoteMedia?: unknown;
+    remoteTimeout?: unknown;
   };
 
 interface StructuredSourceResult {
@@ -289,12 +298,17 @@ async function buildAnkiPackage(options: {
   outputPath: string;
   deckTitle: string;
   logger: Logger;
-  mediaDir?: string;
+  /* Absent for a deck pdfanki just generated, which names no image and has no
+     directory to look in. Without a resolver a reference stays as written, which
+     is what the library does and what this did before. */
+  media?: MediaOptions;
 }): Promise<void> {
-  const { deck, outputPath, deckTitle, logger, mediaDir } = options;
+  const { deck, outputPath, deckTitle, logger, media } = options;
   const diagnostics = await writeApkg(deck, outputPath, {
     deckName: deckTitle,
-    ...(mediaDir ? { resolveMedia: localMedia(mediaDir) } : {}),
+    highlight,
+    template: await defaultTemplate(CODE_THEME),
+    ...(media === undefined ? {} : { resolveMedia: createMediaResolver(media) }),
   });
 
   for (const item of diagnostics) {
@@ -309,8 +323,10 @@ async function runMarkdownToAnki(options: {
   output: OutputPlan;
   deckTitleArg: string | undefined;
   dryRun: boolean;
+  remoteMedia: boolean;
+  remoteTimeoutMs: number;
 }): Promise<void> {
-  const { ui, inputPath, output, deckTitleArg, dryRun } = options;
+  const { ui, inputPath, output, deckTitleArg, dryRun, remoteMedia, remoteTimeoutMs } = options;
   const { logger, spinner } = ui;
   const { outputPath, usedDefaultOutputPath } = output;
 
@@ -349,10 +365,10 @@ async function runMarkdownToAnki(options: {
       deckTitle,
       logger,
       /* Images are resolved beside the deck that names them, which is where a
-         relative reference in someone's vault points. Remote ones are left as
-         written: downloading needs a timeout and a policy on whether to touch the
-         network at all, and `ankimd build` is the command that has both. */
-      mediaDir: dirname(inputPath),
+         relative reference in someone's vault points. A remote one is downloaded
+         only when `--remote-media` says so: this command is published and already
+         in use, so touching the network is asked for rather than assumed. */
+      media: { directories: [dirname(inputPath)], remote: remoteMedia, timeoutMs: remoteTimeoutMs },
     });
   });
 
@@ -567,6 +583,9 @@ async function executeWorkflow(options: {
       output,
       deckTitleArg: normalizePathArg(args.deckTitle),
       dryRun,
+      remoteMedia: toBool(args.remoteMedia, false),
+      remoteTimeoutMs:
+        normalizeIntegerOption(args.remoteTimeout, "--remote-timeout", 1) ?? DEFAULT_TIMEOUT_MS,
     });
   }
 

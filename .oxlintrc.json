@@ -269,6 +269,16 @@
   },
   "overrides": [
     {
+      // Prism registers a language by being imported, one module per language.
+      // There is nothing to assign: the import *is* the registration, and the
+      // order matters, which is why `markup-templating` carries a note. Same
+      // exemption, same reason, as the copy in `ankimd/cli`.
+      "files": ["cli/src/highlight.ts"],
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
       // The yargs wiring, and all that is left of it here. Its option helpers
       // compose by nesting - each `with*` takes the parser and hands it back -
       // so the builder for one subcommand is six calls deep on purpose, and the

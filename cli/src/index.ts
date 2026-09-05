@@ -12,6 +12,7 @@ import {
   handleResetConfig,
 } from "./configCommands.js";
 import { handleIndexTemplate } from "./indexTemplate.js";
+import { DEFAULT_TIMEOUT_MS } from "./media.js";
 import { runWorkflowCommand } from "./workflow.js";
 
 const callerCwd = process.env.PDFANKI_CALLER_CWD;
@@ -136,6 +137,28 @@ function withEpubSourceOptions<T>(command: Argv<T>): Argv<T> {
       type: "number",
       describe:
         "Number of characters to print in EPUB section previews. Implies --preview when provided.",
+    });
+}
+
+/**
+ * The two flags that let a conversion reach the network.
+ *
+ * Same spelling as `ankimd build`, opposite default. That command has downloaded
+ * images since it shipped and spells the opt-out `--no-remote-media`; this one is
+ * already published without the capability, so it is asked for rather than assumed.
+ */
+function withRemoteMediaOptions<T>(command: Argv<T>): Argv<T> {
+  return command
+    .option("remote-media", {
+      type: "boolean",
+      default: false,
+      describe:
+        "Download images the deck references over http and https. Off by default; local images are always packaged.",
+    })
+    .option("remote-timeout", {
+      type: "number",
+      default: DEFAULT_TIMEOUT_MS,
+      describe: "How long to wait for one download, in milliseconds.",
     });
 }
 
@@ -373,9 +396,11 @@ const cli = yargs(rawArgs)
             withUiOptions(
               withDryRunOption(
                 withDeckTitleOption(
-                  withOutputOption(
-                    withInputPositional(commandY, "Path to the markdown flashcard file."),
-                    "Output path for the Anki package. Defaults to ./<input>.apkg.",
+                  withRemoteMediaOptions(
+                    withOutputOption(
+                      withInputPositional(commandY, "Path to the markdown flashcard file."),
+                      "Output path for the Anki package. Defaults to ./<input>.apkg.",
+                    ),
                   ),
                 ),
               ),

@@ -7,7 +7,30 @@ Notable changes per release. Both published packages — `@shbernal/pdfanki` and
 
 ## Unreleased
 
+### Added
+
+- **`pdfanki md anki` highlights fenced code and can download remote images.** It used
+  to package images sitting beside the deck and nothing else, which made it the lesser
+  of two commands that do the same job. A fence tagged with a language Prism knows is
+  coloured at build time, and the theme's stylesheet rides along in the note type's CSS,
+  so a card is coloured with no script and no media file. Every command that writes an
+  `.apkg` gets that, not only `md anki`.
+
+  Downloading is opt-in: `--remote-media` turns it on and `--remote-timeout` bounds one
+  download, defaulting to 10000ms. Off by default because reaching the network is a new
+  capability on a command people already run; an image that is not downloaded stays in
+  the card as written and is reported, which is what happened to every remote image
+  before. `ankimd build` remains the right tool for a directory of decks, and for a
+  template of your own.
+
 ### Changed
+
+- **`@ankimd/core` moved from 0.0.4 to 0.0.6.** Two fixes in it reach `md anki`
+  directly: an image written as `](<name>)` or `](name "title")` was never packaged,
+  because the reader only recognized `](name)`, and a media file whose name did not stay
+  inside the media directory is now refused and reported rather than written. 0.0.5 also
+  made a deck's `title` and `titleSource` one discriminated union, which the deck
+  `pdfanki` builds already satisfied.
 
 - **Deck building moved from `@shbernal/mdanki` to `@ankimd/core`.** One package now
   owns Flashcard Markdown for the whole family, and `pdfanki` holds none of it: the

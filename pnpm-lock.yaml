@@ -33,15 +33,21 @@ importers:
   cli:
     dependencies:
       '@ankimd/core':
-        specifier: ^0.0.4
-        version: 0.0.4
+        specifier: ^0.0.6
+        version: 0.0.6
       '@shbernal/pdfanki':
         specifier: workspace:^
         version: link:../packages/pdfanki
+      prismjs:
+        specifier: ^1.30.0
+        version: 1.30.0
       yargs:
         specifier: ^18.1.0
         version: 18.1.0
     devDependencies:
+      '@types/prismjs':
+        specifier: ^1.26.6
+        version: 1.26.6
       '@types/yargs':
         specifier: ^17.0.35
         version: 17.0.35
@@ -72,8 +78,8 @@ importers:
 
 packages:
 
-  '@ankimd/core@0.0.4':
-    resolution: {integrity: sha512-uTpMPftHSFmByD4wZEokDpc68DvyY5FtIMcAdw//pbEQKFwbYhLsy4OPkK9toHir7g7ditlZNXdmzkmXmML2Aw==}
+  '@ankimd/core@0.0.6':
+    resolution: {integrity: sha512-MFXs1KvapTM6yQzQIxaZGLR9DArSYJJuN6dVeDjcwn4QuRb4ijyBxygMFeSZ4GKpBh6TO5M9kSd4ZSkxh0eazg==}
     engines: {node: '>=24'}
 
   '@anthropic-ai/sdk@0.121.0':
@@ -745,6 +751,9 @@ packages:
   '@types/node@26.3.0':
     resolution: {integrity: sha512-L3fgrnchriRC2ExBflb8j4uZZURHZfQsmQeyVzhjcHW4kkwVyo8/0h1B2MVzMTrYUJYu6G7EWs14hW/L9putqw==}
 
+  '@types/prismjs@1.26.6':
+    resolution: {integrity: sha512-vqlvI7qlMvcCBbVe0AKAb4f97//Hy0EBTaiW8AalRnG/xAN5zOiWWyrNqNXeq8+KAuvRewjCVY1+IPxk4RdNYw==}
+
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
 
@@ -1184,6 +1193,10 @@ packages:
     resolution: {integrity: sha512-DlOzet0HO7OEnmUmB6wWGJrrdvbyJKftI1bhMitK7O2N8W2gc757yyYBbINy9IDafXAV9wmKr9t7xsTaNKRG5Q==}
     engines: {node: '>=20.16.0 || >=22.3.0'}
 
+  prismjs@1.30.0:
+    resolution: {integrity: sha512-DEvV2ZF2r2/63V+tK8hQvrR2ZGn10srHbXviTlcv7Kpzw8jWiNTqbVgjO3IY8RxrrOUF8VPMQQFysYYYv0YZxw==}
+    engines: {node: '>=6'}
+
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
 
@@ -1305,7 +1318,7 @@ packages:
 
 snapshots:
 
-  '@ankimd/core@0.0.4':
+  '@ankimd/core@0.0.6':
     dependencies:
       '@shbernal/anki-apkg-export': 6.1.0
       marked: 18.0.11
@@ -1684,6 +1697,8 @@ snapshots:
   '@types/node@26.3.0':
     dependencies:
       undici-types: 8.3.0
+
+  '@types/prismjs@1.26.6': {}
 
   '@types/retry@0.12.0': {}
 
@@ -2076,6 +2091,8 @@ snapshots:
   pdfjs-dist@5.4.296:
     optionalDependencies:
       '@napi-rs/canvas': 0.1.100
+
+  prismjs@1.30.0: {}
 
   process-nextick-args@2.0.1: {}
 
