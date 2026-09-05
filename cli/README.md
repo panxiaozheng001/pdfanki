@@ -54,6 +54,17 @@ Default `settings.json` shape:
 }
 ```
 
+The file is read key by key. A value that is not the type the setting expects
+falls back to that setting's default rather than reaching the command that uses
+it, so a `"previewChars": "twelve"` costs you `previewChars` and nothing else. An
+unreadable EPUB title filter is dropped and the rest of the array is kept. Keys
+pdfanki does not know are ignored, not carried through, and a file that will not
+parse at all gives the defaults.
+
+The flat spellings `outputPath`, `defaultProvider`, `defaultPrompt`, `providers`
+and `epubFilters` are still read for files written before the nested sections
+existed. Where both are present the nested one wins.
+
 ## Usage
 
 - The CLI is organized by source type, then by target type:

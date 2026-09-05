@@ -298,22 +298,6 @@
       }
     },
     {
-      // `loadSettings` reads the user's settings.json and merges it into the
-      // defaults by spreading, so `JSON.parse`'s `any` flows through every
-      // branch of that merge. Narrowing it means replacing the spreads with
-      // field-by-field validation, which stops carrying unknown keys through -
-      // a behavior change, and its own task. Written down as
-      // `[pdfanki-settings-validation]`.
-      "files": ["cli/src/config.ts"],
-      "rules": {
-        "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-return": "off"
-      }
-    },
-    {
       "files": ["**/tests/**"],
       "rules": {
         // `node:test`'s `test()` returns a promise the runner owns and settles;
