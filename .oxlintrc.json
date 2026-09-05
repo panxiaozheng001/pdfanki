@@ -269,20 +269,16 @@
   },
   "overrides": [
     {
-      // The yargs wiring. Its option helpers compose by nesting - each `with*`
-      // takes the parser and hands it back - so the builder for one subcommand
-      // is six calls deep on purpose, and the parser is one expression
-      // declaring the whole command surface. Splitting it to fit a line budget
-      // would scatter the thing a reader most wants to see in one piece. The
-      // file's size is already written down as `[pdfanki-index-size]`; this is
-      // not a decision to keep it that way.
+      // The yargs wiring, and all that is left of it here. Its option helpers
+      // compose by nesting - each `with*` takes the parser and hands it back -
+      // so the builder for one subcommand is six calls deep on purpose, and the
+      // parser is one expression declaring the whole command surface. Splitting
+      // it to fit a line budget would scatter the thing a reader most wants to
+      // see in one piece. Every other budget this file used to be excused from
+      // it now meets.
       "files": ["cli/src/index.ts"],
       "rules": {
-        "unicorn/max-nested-calls": "off",
-        "max-lines": "off",
-        "max-lines-per-function": "off",
-        "max-statements": "off",
-        "max-depth": "off"
+        "unicorn/max-nested-calls": "off"
       }
     },
     {
