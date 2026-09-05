@@ -47,7 +47,7 @@
   "devDependencies": {
     "@types/prismjs": "^1.26.6",
     "@types/yargs": "^17.0.35",
-    "flashcard-md-spec": "~1.0.0",
+    "flashcard-md-spec": "~1.1.0",
     "tsx": "^4.23.13"
   },
   "engines": {
