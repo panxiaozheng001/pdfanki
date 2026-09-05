@@ -101,15 +101,20 @@ export async function callCodexProvider(options: CodexProviderOptions): Promise<
     content: options.content,
   });
   const result = await runner(
+    /* Written only where there is a value: these three are optional to
+        `buildCodexExecArgs`, and an absent key and a key holding undefined are
+        the same instruction to it. */
     buildCodexExecArgs({
-      model: options.model,
-      reasoningEffort: options.reasoningEffort,
-      profile: options.profile,
+      ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: options.reasoningEffort }),
+      ...(options.profile === undefined ? {} : { profile: options.profile }),
     }),
     prompt,
     {
       command,
-      cwd: options.cwd,
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
       timeoutMs,
     },
   );

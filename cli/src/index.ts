@@ -144,13 +144,21 @@ function normalizePathArg(value: unknown): string | undefined {
 function normalizePreviewCliArgs(args: string[]): string[] {
   const normalizedArgs: string[] = [];
 
-  for (let index = 0; index < args.length; index++) {
-    const current = args[index];
+  /* `--preview 200` is rewritten to `--preview --preview-chars 200`, so a pass
+     that reads the count has already consumed the argument after it. */
+  let consumedNext = false;
+
+  for (const [index, current] of args.entries()) {
+    if (consumedNext) {
+      consumedNext = false;
+      continue;
+    }
+
     if (current === "--preview") {
       const next = args[index + 1];
       if (typeof next === "string" && /^\d+$/.test(next)) {
         normalizedArgs.push("--preview", "--preview-chars", next);
-        index++;
+        consumedNext = true;
         continue;
       }
     }
@@ -361,10 +369,10 @@ function findPageOverlaps(sections: ContentSection[]): {
     overlapEnd: number;
   }[] = [];
 
-  for (let i = 0; i < ranges.length; i++) {
-    for (let j = i + 1; j < ranges.length; j++) {
-      const left = ranges[i];
-      const right = ranges[j];
+  for (const [i, left] of ranges.entries()) {
+    /* Every later range, sliced rather than indexed from j: the pair is what this
+       compares and the second index was only ever a way to reach it. */
+    for (const right of ranges.slice(i + 1)) {
       const overlapStart = Math.max(left.start, right.start);
       const overlapEnd = Math.min(left.end, right.end);
 
@@ -764,7 +772,7 @@ function normalizeIntegerOption(
 }
 
 function buildBasicExtractPayload(book: BookJson): {
-  content: { index: number; title?: string; text?: string }[];
+  content: { index: number; title: string | undefined; text: string | undefined }[];
 } {
   return {
     content: book.content.map((section) => ({
@@ -964,12 +972,12 @@ async function loadStructuredSource(options: {
   inputPath: string;
   ui: CliUi;
   settings: CliSettings;
-  indexPath?: string;
-  indexRanges?: string;
-  startChapter?: number;
-  endChapter?: number;
-  excludeChapters?: string;
-  minChars?: number;
+  indexPath: string | undefined;
+  indexRanges: string | undefined;
+  startChapter: number | undefined;
+  endChapter: number | undefined;
+  excludeChapters: string | undefined;
+  minChars: number | undefined;
   debug: boolean;
   fullFidelity: boolean;
 }): Promise<StructuredSourceResult> {
@@ -1008,16 +1016,19 @@ async function loadStructuredSource(options: {
   const convertOptions: ConvertFileOptions = {
     inputPath,
     type: sourceKind,
-    indexPath,
-    indexRanges,
-    startChapter,
-    endChapter,
-    excludeChapters,
-    minChars,
     preview: settings.epub.preview,
     previewChars: settings.epub.previewChars,
     epubFilters: fullFidelity ? { titles: [] } : settings.epub.filters,
     debug,
+    /* Written only where the flag was given. These are optional to
+       `convertFileFromPath`, which is published, so the key stays off rather than
+       the library's signature growing an `| undefined` for every caller. */
+    ...(indexPath === undefined ? {} : { indexPath }),
+    ...(indexRanges === undefined ? {} : { indexRanges }),
+    ...(startChapter === undefined ? {} : { startChapter }),
+    ...(endChapter === undefined ? {} : { endChapter }),
+    ...(excludeChapters === undefined ? {} : { excludeChapters }),
+    ...(minChars === undefined ? {} : { minChars }),
   };
 
   return convertFileFromPath(convertOptions);
@@ -1267,8 +1278,10 @@ async function runWorkflowCommand(
     const codexOptions =
       provider === "codex"
         ? {
-            reasoningEffort: codexReasoningEffort,
-            profile: codexProfile,
+            ...(codexReasoningEffort === undefined
+              ? {}
+              : { reasoningEffort: codexReasoningEffort }),
+            ...(codexProfile === undefined ? {} : { profile: codexProfile }),
           }
         : undefined;
 
@@ -1387,6 +1400,20 @@ async function runWorkflowCommand(
       try {
         let parsedCards: Card[] | null = null;
 
+        /* One request for both ways of making it: the heartbeat wraps the call
+           and the bare path does not, and the only thing that differed between
+           them was which of the two spelled the arguments out. `apiKey` and
+           `codex` are written only where there is one, since the provider reads
+           an absent key and an undefined one the same way. */
+        const request = {
+          provider,
+          model,
+          prompt: prompt.contents,
+          content: sectionText,
+          ...(apiKeyLookup?.apiKey === undefined ? {} : { apiKey: apiKeyLookup.apiKey }),
+          ...(codexOptions === undefined ? {} : { codex: codexOptions }),
+        };
+
         for (let attempt = 1; attempt <= MAX_MARKDOWN_VALIDATION_ATTEMPTS; attempt++) {
           const retrySuffix =
             attempt > 1 ? ` (retry ${attempt}/${MAX_MARKDOWN_VALIDATION_ATTEMPTS})` : "";
@@ -1397,24 +1424,9 @@ async function runWorkflowCommand(
                 label: `${sectionProgressName} | Model reasoning...${retrySuffix}`,
                 intervalMs: 100,
                 animateSpinner: true,
-                action: () =>
-                  generateFlashcards({
-                    provider,
-                    model,
-                    apiKey: apiKeyLookup?.apiKey,
-                    prompt: prompt.contents,
-                    content: sectionText,
-                    codex: codexOptions,
-                  }),
+                action: () => generateFlashcards(request),
               })
-            : await generateFlashcards({
-                provider,
-                model,
-                apiKey: apiKeyLookup?.apiKey,
-                prompt: prompt.contents,
-                content: sectionText,
-                codex: codexOptions,
-              });
+            : await generateFlashcards(request);
 
           rawResponse = response;
 

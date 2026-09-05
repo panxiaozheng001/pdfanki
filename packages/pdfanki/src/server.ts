@@ -106,8 +106,7 @@ function validateIndexEntries(entries: IndexEntry[], sourceLabel: string): Index
     throw new Error(`${sourceLabel} must contain at least one range.`);
   }
 
-  for (let i = 0; i < entries.length; i++) {
-    const current = entries[i];
+  for (const [i, current] of entries.entries()) {
     if (current.start > current.end) {
       throw new Error(
         `${sourceLabel} entry ${i + 1} has start page ${current.start} greater than end page ${current.end}.`,
@@ -199,23 +198,30 @@ function parseIndexRanges(indexRanges?: string): IndexEntry[] | null {
       );
     }
 
-    const match = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(part);
-    if (!match) {
+    /* Destructured rather than indexed, so the two groups are checked with the
+       match itself instead of being taken on trust afterwards. */
+    const [, startPage, endPage] = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(part) ?? [];
+    if (startPage === undefined || endPage === undefined) {
       throw new Error(`Index ranges segment ${index + 1} must use "<start>-<end>" syntax.`);
     }
 
     return {
-      start: normalizeIndexPage(Number.parseInt(match[1], 10), "start", "Index ranges", index + 1),
-      end: normalizeIndexPage(Number.parseInt(match[2], 10), "end", "Index ranges", index + 1),
+      start: normalizeIndexPage(Number.parseInt(startPage, 10), "start", "Index ranges", index + 1),
+      end: normalizeIndexPage(Number.parseInt(endPage, 10), "end", "Index ranges", index + 1),
     };
   });
 
   return validateIndexEntries(entries, "Index ranges");
 }
 
+/*
+ * Required keys that may be undefined rather than optional ones: the caller has
+ * both values in hand and undefined is the answer "not given", which is a thing
+ * this function handles rather than a key it wants left off.
+ */
 async function resolveIndexEntries(options: {
-  indexPath?: string;
-  indexRanges?: string;
+  indexPath: string | undefined;
+  indexRanges: string | undefined;
 }): Promise<IndexEntry[] | null> {
   const { indexPath, indexRanges } = options;
 
@@ -257,15 +263,15 @@ function parseExcludeChapters(value?: string): ReadonlySet<number> | undefined {
       continue;
     }
 
-    const rangeMatch = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(part);
-    if (!rangeMatch) {
+    const [, rangeStart, rangeEnd] = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(part) ?? [];
+    if (rangeStart === undefined || rangeEnd === undefined) {
       throw new Error(
         `Exclude chapters segment ${index + 1} must use "<chapter>" or "<start>-<end>" syntax.`,
       );
     }
 
-    const start = Number.parseInt(rangeMatch[1], 10);
-    const end = Number.parseInt(rangeMatch[2], 10);
+    const start = Number.parseInt(rangeStart, 10);
+    const end = Number.parseInt(rangeEnd, 10);
     if (start > end) {
       throw new Error(
         `Exclude chapters segment ${index + 1} has start chapter ${start} greater than end chapter ${end}.`,

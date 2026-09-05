@@ -13,6 +13,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "strict": true,
+    // Beyond `strict`, and the last two flags the three packages in this family
+    // did not agree on. `noUncheckedIndexedAccess` is the one that pays here:
+    // the PDF and EPUB plumbing indexes into arrays and records constantly.
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "types": ["node"]
   }
 }

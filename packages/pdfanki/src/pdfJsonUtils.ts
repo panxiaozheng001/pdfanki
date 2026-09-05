@@ -311,8 +311,10 @@ function processWithIndex(pages: Pdf2JsonPage[], index: IndexEntry[]): PdfSectio
 
     // Extract text from chapter pages
     let chapterText = "";
-    for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
-      const pageText = extractTextFromPage(pages[pageIndex]);
+    /* Sliced rather than indexed: the bounds are checked just above, and a
+       slice carries that proof into the loop. */
+    for (const page of pages.slice(startPage, endPage + 1)) {
+      const pageText = extractTextFromPage(page);
       if (pageText && pageText.trim().length > 0) {
         chapterText += `${pageText.trim()}\n\n`;
       }

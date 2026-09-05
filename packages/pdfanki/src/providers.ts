@@ -76,7 +76,7 @@ async function callGemini(options: GenerateFlashcardsOptions): Promise<string> {
   try {
     const { GoogleGenAI } = await import("@google/genai");
     const client = new GoogleGenAI({
-      apiKey,
+      ...(apiKey === undefined ? {} : { apiKey }),
       httpOptions: { timeout: GEMINI_TIMEOUT_MS },
     });
     const response = await client.models.generateContent({
@@ -166,8 +166,10 @@ async function callCodex(options: GenerateFlashcardsOptions): Promise<string> {
     prompt: options.prompt,
     content: options.content,
     model: options.model,
-    reasoningEffort: options.codex?.reasoningEffort,
-    profile: options.codex?.profile,
+    ...(options.codex?.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: options.codex.reasoningEffort }),
+    ...(options.codex?.profile === undefined ? {} : { profile: options.codex.profile }),
   });
 }
 

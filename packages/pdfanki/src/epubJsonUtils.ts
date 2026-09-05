@@ -226,10 +226,9 @@ export function parseEpubWithEpubLib(
 
       // Extract text from all chapters
       const extractedChapters: ExtractedChapter[] = [];
-      for (let i = 0; i < chapters.length; i++) {
-        const chapter = chapters[i];
+      for (const [i, chapter] of chapters.entries()) {
         const chapterNumber = i + 1;
-        const chapterTitle = chapterTitleOf(chapter?.title, chapterNumber);
+        const chapterTitle = chapterTitleOf(chapter.title, chapterNumber);
         const styledChapterTitle = styleText(chapterTitle, {
           useColor,
           color: "blue",
@@ -387,7 +386,7 @@ export function transformEpubResult(
       filteredOut.push({
         originalIndex: chapterNumber,
         title: chapter.title,
-        reason: filterResult.reason,
+        ...(filterResult.reason === undefined ? {} : { reason: filterResult.reason }),
       });
       continue;
     }
