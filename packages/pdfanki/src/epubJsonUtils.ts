@@ -35,26 +35,26 @@ interface FilteredChapter {
 
 /** A title filter rule compiled to a predicate. */
 interface TitleMatcher {
-  reason: string;
-  test: (titleLower: string) => boolean;
+  readonly reason: string;
+  readonly test: (titleLower: string) => boolean;
 }
 
 /** The half-open chapter selection a `--start-section`/`--end-section` pair names. */
 interface ChapterRange {
-  startIdx: number;
-  endIdx: number;
+  readonly startIdx: number;
+  readonly endIdx: number;
 }
 
 /** What `parseEpubWithEpubLib` hands `transformEpubResult`. */
 export interface EpubParseResult {
-  metadata: Metadata;
-  chapters: ExtractedChapter[];
-  totalChapters: number;
+  readonly metadata: Metadata;
+  readonly chapters: readonly Readonly<ExtractedChapter>[];
+  readonly totalChapters: number;
 }
 
 /** The name of the file a transform is describing. */
 interface SourceFile {
-  name: string;
+  readonly name: string;
 }
 
 /** A chapter title as the EPUB spells it, or a generated stand-in. */
@@ -77,11 +77,11 @@ function canUseColor(): boolean {
 
 function styleText(
   text: string,
-  options: {
+  options: Readonly<{
     useColor?: boolean;
     color?: "blue" | "green" | "red" | "yellow";
     underline?: boolean;
-  } = {},
+  }> = {},
 ): string {
   const useColor = options.useColor === true;
   const { color } = options;
@@ -162,10 +162,7 @@ function resolveChapterRange(
   return { startIdx, endIdx };
 }
 
-function getChapterRangeReason(
-  chapterNumber: number,
-  selectedRange: { startIdx: number; endIdx: number },
-): string | null {
+function getChapterRangeReason(chapterNumber: number, selectedRange: ChapterRange): string | null {
   if (chapterNumber < selectedRange.startIdx + 1 || chapterNumber > selectedRange.endIdx + 1) {
     return `outside range ${selectedRange.startIdx + 1}-${selectedRange.endIdx + 1}`;
   }
@@ -525,7 +522,7 @@ function buildTitleMatchers(filters: readonly EpubTitleFilter[] | undefined): Ti
 
 function getSelectionFilterReason(
   chapterNumber: number,
-  selectedRange: { startIdx: number; endIdx: number },
+  selectedRange: ChapterRange,
   excludedChapters?: ReadonlySet<number>,
 ): string | null {
   const rangeReason = getChapterRangeReason(chapterNumber, selectedRange);

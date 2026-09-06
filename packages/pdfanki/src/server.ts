@@ -6,25 +6,31 @@ import { parseEpubWithEpubLib, transformEpubResult } from "./epubJsonUtils.js";
 import { parsePdfWithPdfParse, transformPdfParseResult } from "./pdfJsonUtils.js";
 import { bookJsonToPlainText, type SupportedProvider } from "./providers.js";
 import { cleanTransformedResult } from "./textTransformation.js";
-import type { BookJson, IndexEntry } from "./types/flashcards.js";
+import type {
+  BookJson,
+  IndexEntry,
+  ReadonlyBookJson,
+  ReadonlyContentSection,
+  ReadonlyIndexEntry,
+} from "./types/flashcards.js";
 
 type SupportedFileType = "pdf" | "epub";
 
 export interface ConvertFileOptions {
-  inputPath: string;
-  type?: string;
-  indexPath?: string;
-  indexRanges?: string;
-  startChapter?: number;
-  endChapter?: number;
-  excludeChapters?: string;
-  minChars?: number;
-  preview?: boolean;
-  previewChars?: number;
-  provider?: SupportedProvider;
-  model?: string;
-  epubFilters?: EpubFilters;
-  debug?: boolean;
+  readonly inputPath: string;
+  readonly type?: string;
+  readonly indexPath?: string;
+  readonly indexRanges?: string;
+  readonly startChapter?: number;
+  readonly endChapter?: number;
+  readonly excludeChapters?: string;
+  readonly minChars?: number;
+  readonly preview?: boolean;
+  readonly previewChars?: number;
+  readonly provider?: SupportedProvider;
+  readonly model?: string;
+  readonly epubFilters?: EpubFilters;
+  readonly debug?: boolean;
 }
 
 export interface ConvertFileResult {
@@ -101,7 +107,8 @@ function normalizeIndexPage(
   return value;
 }
 
-function validateIndexEntries(entries: IndexEntry[], sourceLabel: string): IndexEntry[] {
+/** Throws on the first entry that is out of order, overlapping or backwards. */
+function validateIndexEntries(entries: readonly ReadonlyIndexEntry[], sourceLabel: string): void {
   if (entries.length === 0) {
     throw new Error(`${sourceLabel} must contain at least one range.`);
   }
@@ -128,11 +135,9 @@ function validateIndexEntries(entries: IndexEntry[], sourceLabel: string): Index
       );
     }
   }
-
-  return entries;
 }
 
-function normalizeIndexEntries(rawEntries: unknown[], sourceLabel: string): IndexEntry[] {
+function normalizeIndexEntries(rawEntries: readonly unknown[], sourceLabel: string): IndexEntry[] {
   const entries = rawEntries.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
       throw new Error(
@@ -161,7 +166,8 @@ function normalizeIndexEntries(rawEntries: unknown[], sourceLabel: string): Inde
     return title ? { start, end, title } : { start, end };
   });
 
-  return validateIndexEntries(entries, sourceLabel);
+  validateIndexEntries(entries, sourceLabel);
+  return entries;
 }
 
 async function loadIndexFile(indexPath?: string): Promise<IndexEntry[] | null> {
@@ -211,7 +217,8 @@ function parseIndexRanges(indexRanges?: string): IndexEntry[] | null {
     };
   });
 
-  return validateIndexEntries(entries, "Index ranges");
+  validateIndexEntries(entries, "Index ranges");
+  return entries;
 }
 
 /*
@@ -219,10 +226,12 @@ function parseIndexRanges(indexRanges?: string): IndexEntry[] | null {
  * both values in hand and undefined is the answer "not given", which is a thing
  * this function handles rather than a key it wants left off.
  */
-async function resolveIndexEntries(options: {
-  indexPath: string | undefined;
-  indexRanges: string | undefined;
-}): Promise<IndexEntry[] | null> {
+async function resolveIndexEntries(
+  options: Readonly<{
+    indexPath: string | undefined;
+    indexRanges: string | undefined;
+  }>,
+): Promise<IndexEntry[] | null> {
   const { indexPath, indexRanges } = options;
 
   if (indexPath && indexRanges !== undefined) {
@@ -286,16 +295,19 @@ function parseExcludeChapters(value?: string): ReadonlySet<number> | undefined {
   return excluded;
 }
 
-function applyMinCharsFilter(
-  book: BookJson,
-  minChars?: number,
-): { data: BookJson; filteredCount: number } {
+/**
+ * The deck a `--min-chars` threshold leaves, or `null` when it drops nothing -
+ * which is the caller's cue to pass its own book through rather than rebuild an
+ * identical one. Returning the argument instead would be handing back a deck
+ * this function only ever read.
+ */
+function applyMinCharsFilter(book: ReadonlyBookJson, minChars?: number): BookJson | null {
   if (typeof minChars !== "number" || minChars <= 0) {
-    return { data: book, filteredCount: 0 };
+    return null;
   }
 
   let filteredCount = 0;
-  const keptSections: BookJson["content"] = [];
+  const keptSections: ReadonlyContentSection[] = [];
 
   for (const section of book.content) {
     const textLength = section.text?.length ?? 0;
@@ -307,7 +319,7 @@ function applyMinCharsFilter(
   }
 
   if (filteredCount === 0) {
-    return { data: book, filteredCount: 0 };
+    return null;
   }
 
   const reindexedContent = keptSections.map((section, index) => ({
@@ -316,16 +328,13 @@ function applyMinCharsFilter(
   }));
 
   return {
-    filteredCount,
-    data: {
-      ...book,
-      metadata: {
-        ...book.metadata,
-        extractedSections: reindexedContent.length,
-        filteredSections: (book.metadata?.filteredSections ?? 0) + filteredCount,
-      },
-      content: reindexedContent,
+    ...book,
+    metadata: {
+      ...book.metadata,
+      extractedSections: reindexedContent.length,
+      filteredSections: (book.metadata?.filteredSections ?? 0) + filteredCount,
     },
+    content: reindexedContent,
   };
 }
 
@@ -372,7 +381,7 @@ export async function convertFileFromPath(options: ConvertFileOptions): Promise<
     const pdfData = await parsePdfWithPdfParse(fileBuffer, Boolean(debug));
     const transformed = transformPdfParseResult(pdfData, originalFile, parsedIndex);
     const cleaned = cleanTransformedResult(transformed);
-    const { data: filteredByMinChars } = applyMinCharsFilter(cleaned, minChars);
+    const filteredByMinChars = applyMinCharsFilter(cleaned, minChars) ?? cleaned;
     return {
       data: filteredByMinChars,
       text: bookJsonToPlainText(filteredByMinChars),
@@ -434,4 +443,12 @@ export {
   type EpubTitleFilter,
 } from "./epubFilters.js";
 export type { SupportedProvider } from "./providers.js";
-export type { BookJson, ContentSection, IndexEntry } from "./types/flashcards.js";
+export type {
+  BookJson,
+  ContentSection,
+  IndexEntry,
+  ReadonlyBookJson,
+  ReadonlyBookMetadata,
+  ReadonlyContentSection,
+  ReadonlyIndexEntry,
+} from "./types/flashcards.js";

@@ -1,4 +1,13 @@
-export type { BookJson, ContentSection, IndexEntry } from "./types/flashcards.js";
+export type {
+  BookJson,
+  ContentSection,
+  DeletedSection,
+  IndexEntry,
+  ReadonlyBookJson,
+  ReadonlyContentSection,
+  ReadonlyDeletedSection,
+  ReadonlyIndexEntry,
+} from "./types/flashcards.js";
 export { formatFileSize } from "./formatFileSize.js";
 export {
   addToUndoStack,

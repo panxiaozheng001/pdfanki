@@ -1,6 +1,7 @@
 import { callCodexProvider, type CodexReasoningEffort } from "./codexProvider.js";
 import { describeError } from "./describeError.js";
-import type { BookJson } from "./types/flashcards.js";
+import { isList } from "./isList.js";
+import type { ReadonlyBookJson } from "./types/flashcards.js";
 
 export type SupportedProvider =
   | "gemini"
@@ -11,14 +12,14 @@ export type SupportedProvider =
   | "codex";
 
 export interface GenerateFlashcardsOptions {
-  provider: SupportedProvider;
-  model: string;
-  apiKey?: string;
-  prompt: string;
-  content: string;
-  codex?: {
-    reasoningEffort?: CodexReasoningEffort;
-    profile?: string;
+  readonly provider: SupportedProvider;
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly prompt: string;
+  readonly content: string;
+  readonly codex?: {
+    readonly reasoningEffort?: CodexReasoningEffort;
+    readonly profile?: string;
   };
 }
 
@@ -27,7 +28,7 @@ const MS_PER_SECOND = 1000;
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-export function bookJsonToPlainText(book: BookJson): string {
+export function bookJsonToPlainText(book: ReadonlyBookJson): string {
   const parts: string[] = [];
 
   for (const section of book.content) {
@@ -174,9 +175,9 @@ async function callCodex(options: GenerateFlashcardsOptions): Promise<string> {
 }
 
 type OpenAICompatibleOptions = GenerateFlashcardsOptions & {
-  providerName: string;
-  baseURL?: string;
-  defaultHeaders?: Record<string, string>;
+  readonly providerName: string;
+  readonly baseURL?: string;
+  readonly defaultHeaders?: Readonly<Record<string, string>>;
 };
 
 async function callOpenAICompatible(options: OpenAICompatibleOptions): Promise<string> {
@@ -210,15 +211,15 @@ async function callOpenAICompatible(options: OpenAICompatibleOptions): Promise<s
 }
 
 interface OpenAICompatibleResponse {
-  choices?: {
-    message?: {
+  readonly choices?: readonly {
+    readonly message?: {
       // the OpenAI SDK types `content` as nullable; `extractOpenAICompatibleText`
       // already falls through to `null` for anything that is not a string or array
-      content?:
+      readonly content?:
         | string
-        | {
-            type?: string;
-            text?: string;
+        | readonly {
+            readonly type?: string;
+            readonly text?: string;
           }[]
         | null;
     };
@@ -231,7 +232,7 @@ function extractOpenAICompatibleText(payload: OpenAICompatibleResponse): string 
     return content.trim();
   }
 
-  if (!Array.isArray(content)) {
+  if (!isList(content)) {
     return null;
   }
 
@@ -244,7 +245,7 @@ function extractOpenAICompatibleText(payload: OpenAICompatibleResponse): string 
   return text.length > 0 ? text : null;
 }
 
-function readErrorField(source: object, key: "message" | "name" | "code"): unknown {
+function readErrorField(source: Readonly<object>, key: "message" | "name" | "code"): unknown {
   if (key === "message") {
     return "message" in source ? source.message : undefined;
   }

@@ -1,11 +1,20 @@
 // utils/jsonSectionManagement.js
 
-import type { BookJson, BookMetadata, ContentSection, DeletedSection } from "./types/flashcards.js";
+import { isList } from "./isList.js";
+import type {
+  BookJson,
+  BookMetadata,
+  ContentSection,
+  DeletedSection,
+  ReadonlyBookJson,
+  ReadonlyContentSection,
+  ReadonlyDeletedSection,
+} from "./types/flashcards.js";
 
 /**
  * Re-index sections to maintain sequential numbering (1, 2, 3...)
  */
-export function reindexSections(sections: ContentSection[]): ContentSection[] {
+export function reindexSections(sections: readonly ReadonlyContentSection[]): ContentSection[] {
   return sections.map((section, index) => ({
     ...section,
     index: index + 1,
@@ -15,7 +24,7 @@ export function reindexSections(sections: ContentSection[]): ContentSection[] {
 /**
  * Update metadata after sections are modified
  */
-export function updateMetadata(jsonData: BookJson, deletedCount = 0): BookMetadata {
+export function updateMetadata(jsonData: ReadonlyBookJson, deletedCount = 0): BookMetadata {
   const currentSectionCount = jsonData.content?.length || 0;
 
   return {
@@ -29,10 +38,10 @@ export function updateMetadata(jsonData: BookJson, deletedCount = 0): BookMetada
  * Delete a section from JSON data
  */
 export function deleteSection(
-  jsonData: BookJson,
+  jsonData: ReadonlyBookJson,
   sectionIndex: number,
 ): { updatedJsonData: BookJson; deletedSection: DeletedSection } {
-  if (!jsonData?.content || !Array.isArray(jsonData.content)) {
+  if (!jsonData?.content || !isList(jsonData.content)) {
     throw new Error("Invalid JSON data structure");
   }
 
@@ -77,8 +86,11 @@ export function deleteSection(
 /**
  * Restore a deleted section to its original position
  */
-export function undoDelete(jsonData: BookJson, deletedSection: DeletedSection): BookJson {
-  if (!jsonData?.content || !Array.isArray(jsonData.content)) {
+export function undoDelete(
+  jsonData: ReadonlyBookJson,
+  deletedSection: ReadonlyDeletedSection,
+): BookJson {
+  if (!jsonData?.content || !isList(jsonData.content)) {
     throw new Error("Invalid JSON data structure");
   }
 
@@ -113,7 +125,7 @@ export function undoDelete(jsonData: BookJson, deletedSection: DeletedSection): 
  * Get the most recent deleted section from the undo stack
  */
 export function getLastDeleted(
-  deletedSections: DeletedSection[] | null | undefined,
+  deletedSections: readonly ReadonlyDeletedSection[] | null | undefined,
 ): DeletedSection | null {
   if (!deletedSections || deletedSections.length === 0) {
     return null;
@@ -127,8 +139,8 @@ export function getLastDeleted(
  * Add a deleted section to the undo stack
  */
 export function addToUndoStack(
-  deletedSections: DeletedSection[],
-  deletedSection: DeletedSection,
+  deletedSections: readonly ReadonlyDeletedSection[],
+  deletedSection: ReadonlyDeletedSection,
   maxUndoCount = 10,
 ): DeletedSection[] {
   const newStack = [...deletedSections, deletedSection];
@@ -145,7 +157,7 @@ export function addToUndoStack(
  * Remove the most recent deleted section from the undo stack
  */
 export function removeFromUndoStack(
-  deletedSections: DeletedSection[] | null | undefined,
+  deletedSections: readonly ReadonlyDeletedSection[] | null | undefined,
 ): DeletedSection[] {
   if (!deletedSections || deletedSections.length === 0) {
     return [];
@@ -164,14 +176,18 @@ export function clearUndoStack(): DeletedSection[] {
 /**
  * Check if undo is available
  */
-export function canUndo(deletedSections: DeletedSection[] | null | undefined): boolean {
+export function canUndo(
+  deletedSections: readonly ReadonlyDeletedSection[] | null | undefined,
+): boolean {
   return (deletedSections?.length ?? 0) > 0;
 }
 
 /**
  * Get summary of what can be undone
  */
-export function getUndoSummary(deletedSections: DeletedSection[] | null | undefined): {
+export function getUndoSummary(
+  deletedSections: readonly ReadonlyDeletedSection[] | null | undefined,
+): {
   sectionTitle: string | undefined;
   timestamp: number;
   count: number;
@@ -198,14 +214,14 @@ export function getUndoSummary(deletedSections: DeletedSection[] | null | undefi
  */
 export function isBookJson(
   value: unknown,
-  options: { requireMetadata?: boolean; requireTitles?: boolean } = {},
+  options: Readonly<{ requireMetadata?: boolean; requireTitles?: boolean }> = {},
 ): value is BookJson {
   return validateJsonStructure(value, options).isValid;
 }
 
 export function validateJsonStructure(
   jsonData: unknown,
-  options: { requireMetadata?: boolean; requireTitles?: boolean } = {},
+  options: Readonly<{ requireMetadata?: boolean; requireTitles?: boolean }> = {},
 ): { isValid: boolean; error?: string } {
   const { requireMetadata = true, requireTitles = true } = options;
 

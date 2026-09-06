@@ -119,21 +119,26 @@ export interface ProviderSettings {
   profile?: string;
 }
 
+/**
+ * The settings a run was started with. Readonly throughout: `loadSettings`
+ * builds one out of the defaults and the file, and everything downstream reads
+ * it. A command that wants different settings passes different flags.
+ */
 export interface Settings {
-  output: {
-    path: string;
-    paths: Partial<Record<OutputArtifactKind, string>>;
+  readonly output: {
+    readonly path: string;
+    readonly paths: Readonly<Partial<Record<OutputArtifactKind, string>>>;
   };
-  generation: {
-    defaultProvider: SupportedProvider;
-    defaultPrompt: string;
-    providers: Record<SupportedProvider, ProviderSettings>;
+  readonly generation: {
+    readonly defaultProvider: SupportedProvider;
+    readonly defaultPrompt: string;
+    readonly providers: Readonly<Record<SupportedProvider, Readonly<ProviderSettings>>>;
   };
-  epub: {
-    preview: boolean;
-    previewChars: number;
-    filters: {
-      titles: EpubTitleFilter[];
+  readonly epub: {
+    readonly preview: boolean;
+    readonly previewChars: number;
+    readonly filters: {
+      readonly titles: readonly EpubTitleFilter[];
     };
   };
 }
@@ -146,7 +151,7 @@ export interface ConfigPaths {
 }
 
 function mergeUniqueTitleFilters(
-  ...groups: (readonly EpubTitleFilter[] | undefined)[]
+  ...groups: readonly (readonly EpubTitleFilter[] | undefined)[]
 ): EpubTitleFilter[] {
   const seen = new Set<string>();
   const merged: EpubTitleFilter[] = [];
@@ -303,7 +308,10 @@ function normalizedOrDefault(
  * `"gemini": {}` overwrite the default entry outright, leaving a
  * `ProviderSettings` with no `defaultModel` at all, which its own type forbids.
  */
-function readProviderSettings(source: unknown, fallback: ProviderSettings): ProviderSettings {
+function readProviderSettings(
+  source: unknown,
+  fallback: Readonly<ProviderSettings>,
+): ProviderSettings {
   const settings: ProviderSettings = {
     defaultModel: readString(source, "defaultModel") ?? fallback.defaultModel,
   };

@@ -8,13 +8,13 @@ export interface CodexCliRunnerResult {
 }
 
 export interface CodexCliRunnerOptions {
-  command: string;
-  cwd?: string;
-  timeoutMs: number;
+  readonly command: string;
+  readonly cwd?: string;
+  readonly timeoutMs: number;
 }
 
 export type CodexCliRunner = (
-  args: string[],
+  args: readonly string[],
   input: string,
   options: CodexCliRunnerOptions,
 ) => Promise<CodexCliRunnerResult>;
@@ -24,18 +24,18 @@ export const CODEX_REASONING_EFFORTS = ["low", "medium", "high"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
 
 export interface BuildCodexExecArgsOptions {
-  model?: string;
-  reasoningEffort?: CodexReasoningEffort;
-  profile?: string;
+  readonly model?: string;
+  readonly reasoningEffort?: CodexReasoningEffort;
+  readonly profile?: string;
 }
 
 export type CodexProviderOptions = {
-  prompt: string;
-  content: string;
-  command?: string;
-  cwd?: string;
-  timeoutMs?: number;
-  runner?: CodexCliRunner;
+  readonly prompt: string;
+  readonly content: string;
+  readonly command?: string;
+  readonly cwd?: string;
+  readonly timeoutMs?: number;
+  readonly runner?: CodexCliRunner;
 } & BuildCodexExecArgsOptions;
 
 const DEFAULT_CODEX_COMMAND = "codex";
@@ -44,7 +44,9 @@ const MAX_ERROR_OUTPUT_LENGTH = 2000;
 const MS_PER_SECOND = 1000;
 const CODEX_PROFILE_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-export function buildCodexExecPrompt(options: { prompt: string; content: string }): string {
+export function buildCodexExecPrompt(
+  options: Readonly<{ prompt: string; content: string }>,
+): string {
   return [
     "You are an experimental pdfanki flashcard-generation provider.",
     "Use only the prompt and source text below. Do not inspect files, run commands, or modify the workspace.",
@@ -136,7 +138,7 @@ export async function callCodexProvider(options: CodexProviderOptions): Promise<
 }
 
 export function runCodexCli(
-  args: string[],
+  args: readonly string[],
   input: string,
   options: CodexCliRunnerOptions,
 ): Promise<CodexCliRunnerResult> {

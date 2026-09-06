@@ -1,23 +1,24 @@
 // lib/pdfJsonUtils.js
-import { PDFParse, VerbosityLevel } from "pdf-parse";
+import { type PageTextResult, PDFParse, VerbosityLevel } from "pdf-parse";
 
-import type { BookJson, IndexEntry } from "./types/flashcards.js";
+import { isList } from "./isList.js";
+import type { BookJson, ReadonlyIndexEntry } from "./types/flashcards.js";
 
 /**
  * A PDF's own info and metadata dictionaries. The keys are the document's, not
  * ones this package chose, so every read narrows rather than assumes.
  */
-type PdfDictionary = Record<string, unknown>;
+type PdfDictionary = Readonly<Record<string, unknown>>;
 
 /** What `parsePdfWithPdfParse` collects for the transform below. */
 export interface PdfParseResult {
-  pageTexts: string[];
-  rawTextContent: string;
-  info: PdfDictionary;
-  metadata: unknown;
-  numpages: number;
-  numrender: number;
-  version: string | null;
+  readonly pageTexts: readonly string[];
+  readonly rawTextContent: string;
+  readonly info: PdfDictionary;
+  readonly metadata: unknown;
+  readonly numpages: number;
+  readonly numrender: number;
+  readonly version: string | null;
 }
 
 /** How far apart two pdf2json y-positions can be and still be one line. */
@@ -25,31 +26,31 @@ const SAME_LINE_TOLERANCE = 0.1;
 
 /** A page as pdf2json models it: positioned runs of URI-encoded text. */
 interface Pdf2JsonRun {
-  T?: string;
+  readonly T?: string;
 }
 
 interface Pdf2JsonText {
-  x: number;
-  y: number;
-  R?: Pdf2JsonRun[];
+  readonly x: number;
+  readonly y: number;
+  readonly R?: readonly Pdf2JsonRun[];
 }
 
 interface Pdf2JsonPage {
-  Texts?: Pdf2JsonText[];
+  readonly Texts?: readonly Pdf2JsonText[];
 }
 
 /** What pdf2json hands `transformPdf2jsonResult`. */
 export interface Pdf2JsonResult {
-  pdfData: {
-    Pages?: Pdf2JsonPage[];
-    Meta?: PdfDictionary;
+  readonly pdfData: {
+    readonly Pages?: readonly Pdf2JsonPage[];
+    readonly Meta?: PdfDictionary;
   };
-  rawTextContent?: string;
+  readonly rawTextContent?: string;
 }
 
 /** The name of the file a transform is describing. */
 interface SourceFile {
-  name: string;
+  readonly name: string;
 }
 
 /**
@@ -57,7 +58,7 @@ interface SourceFile {
  * fallbacks, kept because an empty PDF title must still fall through to the
  * filename rather than be reported as the title.
  */
-function firstNonEmptyString(...candidates: unknown[]): string | undefined {
+function firstNonEmptyString(...candidates: readonly unknown[]): string | undefined {
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim().length > 0) {
       return candidate;
@@ -132,7 +133,8 @@ export async function parsePdfWithPdfParse(
     const textResult = await parser.getText();
     const infoResult = await parser.getInfo();
 
-    const pageTexts = textResult.pages?.map((page) => page.text ?? "") ?? [];
+    const pageTexts =
+      textResult.pages?.map((page: Readonly<PageTextResult>) => page.text ?? "") ?? [];
 
     // pdf.js nests the document's own metadata one level down under
     // `_metadata` when it has any; otherwise the outer object is it.
@@ -160,10 +162,10 @@ export async function parsePdfWithPdfParse(
 export function transformPdf2jsonResult(
   parsedData: Pdf2JsonResult,
   originalFile: SourceFile,
-  index: IndexEntry[] | null | undefined,
+  index: readonly ReadonlyIndexEntry[] | null | undefined,
 ): BookJson {
   const { pdfData, rawTextContent } = parsedData;
-  const pages: Pdf2JsonPage[] = pdfData.Pages ?? [];
+  const pages: readonly Pdf2JsonPage[] = pdfData.Pages ?? [];
   const meta: PdfDictionary = pdfData.Meta ?? {};
 
   let content: PdfSection[] = [];
@@ -224,9 +226,9 @@ export function transformPdf2jsonResult(
 export function transformPdfParseResult(
   parsedData: PdfParseResult,
   originalFile: SourceFile,
-  index: IndexEntry[] | null | undefined,
+  index: readonly ReadonlyIndexEntry[] | null | undefined,
 ): BookJson {
-  const pageTexts: string[] = parsedData.pageTexts;
+  const pageTexts: readonly string[] = parsedData.pageTexts;
   const totalPages = parsedData.numpages || pageTexts.length;
   const meta: PdfDictionary = parsedData.info;
   const { rawTextContent } = parsedData;
@@ -290,7 +292,10 @@ export function transformPdfParseResult(
 /**
  * Process PDF with chapter index
  */
-function processWithIndex(pages: Pdf2JsonPage[], index: IndexEntry[]): PdfSection[] {
+function processWithIndex(
+  pages: readonly Pdf2JsonPage[],
+  index: readonly ReadonlyIndexEntry[],
+): PdfSection[] {
   const content: PdfSection[] = [];
 
   index.forEach((chapter, chapterIndex) => {
@@ -340,7 +345,10 @@ function processWithIndex(pages: Pdf2JsonPage[], index: IndexEntry[]): PdfSectio
 /**
  * Process PDF with chapter index using plain page text.
  */
-function processWithIndexFromPageText(pageTexts: string[], index: IndexEntry[]): PdfSection[] {
+function processWithIndexFromPageText(
+  pageTexts: readonly string[],
+  index: readonly ReadonlyIndexEntry[],
+): PdfSection[] {
   const content: PdfSection[] = [];
   const totalPages = pageTexts.length;
 
@@ -387,7 +395,7 @@ function processWithIndexFromPageText(pageTexts: string[], index: IndexEntry[]):
  * Process PDF as a single text document (new default when no index)
  */
 function processAsSingleText(
-  filteredPages: Pdf2JsonPage[],
+  filteredPages: readonly Pdf2JsonPage[],
   startPage: number,
   endPage: number,
   fileName: string,
@@ -427,7 +435,7 @@ function processAsSingleText(
  * Process PDF as a single text document from per-page text.
  */
 function processAsSingleTextFromPages(
-  filteredPages: string[],
+  filteredPages: readonly string[],
   startPage: number,
   endPage: number,
   fileName: string,
@@ -464,7 +472,7 @@ function processAsSingleTextFromPages(
 /**
  * Calculate total pages covered by index
  */
-function getTotalPagesFromIndex(index: IndexEntry[]): number {
+function getTotalPagesFromIndex(index: readonly ReadonlyIndexEntry[]): number {
   return index.reduce((total, chapter) => total + (chapter.end - chapter.start + 1), 0);
 }
 
@@ -472,7 +480,7 @@ function getTotalPagesFromIndex(index: IndexEntry[]): number {
  * Extract text content from a pdf2json page object
  */
 function extractTextFromPage(page: Pdf2JsonPage): string {
-  if (!page.Texts || !Array.isArray(page.Texts)) {
+  if (!page.Texts || !isList(page.Texts)) {
     return "";
   }
 
@@ -489,7 +497,7 @@ function extractTextFromPage(page: Pdf2JsonPage): string {
   });
 
   sortedTexts.forEach((textObj) => {
-    if (textObj.R && Array.isArray(textObj.R)) {
+    if (textObj.R && isList(textObj.R)) {
       textObj.R.forEach((run) => {
         if (run.T) {
           // Decode URI-encoded text

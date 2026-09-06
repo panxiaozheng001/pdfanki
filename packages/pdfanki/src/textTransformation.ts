@@ -1,4 +1,4 @@
-import type { BookJson, ContentSection } from "./types/flashcards.js";
+import type { BookJson, ReadonlyBookJson, ReadonlyContentSection } from "./types/flashcards.js";
 
 /**
  * Clean and normalize text content extracted from PDFs. Takes `unknown` because
@@ -35,11 +35,14 @@ export function cleanExtractedText(text: unknown): string {
 }
 
 /** Apply text cleaning to every content section in a transformed result. */
-export function cleanTransformedResult(transformedResult: BookJson): BookJson;
+export function cleanTransformedResult(transformedResult: ReadonlyBookJson): BookJson;
 export function cleanTransformedResult<T extends null | undefined>(transformedResult: T): T;
+// The implementation return type carries `ReadonlyBookJson` that the two
+// overloads do not, because the guard below hands the argument straight back
+// when there is nothing to clean. The overloads are what a caller sees.
 export function cleanTransformedResult(
-  transformedResult: BookJson | null | undefined,
-): BookJson | null | undefined {
+  transformedResult: ReadonlyBookJson | null | undefined,
+): BookJson | ReadonlyBookJson | null | undefined {
   if (!transformedResult?.content) {
     return transformedResult;
   }
@@ -47,7 +50,7 @@ export function cleanTransformedResult(
   // Create a copy to avoid mutating the original
   const cleanedResult = {
     ...transformedResult,
-    content: transformedResult.content.map((section: ContentSection) => ({
+    content: transformedResult.content.map((section: ReadonlyContentSection) => ({
       ...section,
       text: cleanExtractedText(section.text),
     })),

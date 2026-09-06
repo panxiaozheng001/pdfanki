@@ -1,13 +1,17 @@
+/**
+ * A rule, not a record: a filter is written once and only ever read against a
+ * chapter title, so both variants and the list of them are readonly.
+ */
 export type EpubTitleFilter =
-  | { type: "string"; value: string }
-  | { type: "regex"; pattern: string; flags?: string };
+  | { readonly type: "string"; readonly value: string }
+  | { readonly type: "regex"; readonly pattern: string; readonly flags?: string };
 
 export interface EpubFilters {
-  titles?: EpubTitleFilter[];
+  readonly titles?: readonly EpubTitleFilter[];
 }
 
 // Default filters mirror the previous hardcoded patterns.
-export const DEFAULT_EPUB_TITLE_FILTERS: EpubTitleFilter[] = [
+export const DEFAULT_EPUB_TITLE_FILTERS: readonly EpubTitleFilter[] = [
   { type: "regex", pattern: "^contents?$", flags: "i" },
   { type: "regex", pattern: "^dedication$", flags: "i" },
   { type: "regex", pattern: "^about\\s+the\\s+.+$", flags: "i" },
