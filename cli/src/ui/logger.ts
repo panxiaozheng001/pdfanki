@@ -20,10 +20,10 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
 };
 
 export interface LoggerOptions {
-  level: LogLevel;
-  useColor: boolean;
-  stdout?: NodeJS.WriteStream;
-  stderr?: NodeJS.WriteStream;
+  readonly level: LogLevel;
+  readonly useColor: boolean;
+  readonly stdout?: NodeJS.WriteStream;
+  readonly stderr?: NodeJS.WriteStream;
 }
 
 function paint(text: string, color: ColorName, enabled: boolean): string {
@@ -34,12 +34,12 @@ function paint(text: string, color: ColorName, enabled: boolean): string {
 }
 
 export interface Logger {
-  isDebugEnabled: boolean;
-  debug: (message: string) => void;
-  info: (message: string) => void;
-  success: (message: string) => void;
-  warn: (message: string) => void;
-  error: (message: string) => void;
+  readonly isDebugEnabled: boolean;
+  readonly debug: (message: string) => void;
+  readonly info: (message: string) => void;
+  readonly success: (message: string) => void;
+  readonly warn: (message: string) => void;
+  readonly error: (message: string) => void;
 }
 
 export function createLogger(options: LoggerOptions): Logger {
@@ -51,13 +51,15 @@ export function createLogger(options: LoggerOptions): Logger {
     return LEVEL_WEIGHT[target] >= currentWeight;
   }
 
-  function write(entry: {
-    stream: NodeJS.WriteStream;
-    targetLevel: LogLevel;
-    prefix: string;
-    message: string;
-    color: ColorName;
-  }) {
+  function write(
+    entry: Readonly<{
+      stream: NodeJS.WriteStream;
+      targetLevel: LogLevel;
+      prefix: string;
+      message: string;
+      color: ColorName;
+    }>,
+  ) {
     if (!shouldLog(entry.targetLevel)) {
       return;
     }

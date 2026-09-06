@@ -1,7 +1,7 @@
 export interface SpinnerOptions {
-  enabled: boolean;
-  stream?: NodeJS.WriteStream;
-  intervalMs?: number;
+  readonly enabled: boolean;
+  readonly stream?: NodeJS.WriteStream;
+  readonly intervalMs?: number;
 }
 
 const FRAMES = ["|", "/", "-", "\\"];
@@ -11,9 +11,9 @@ function eraseLine(stream: NodeJS.WriteStream) {
 }
 
 export interface Spinner {
-  start: (text: string) => void;
-  update: (text: string) => void;
-  stop: () => void;
+  readonly start: (text: string) => void;
+  readonly update: (text: string) => void;
+  readonly stop: () => void;
 }
 
 export function createSpinner(options: SpinnerOptions): Spinner {

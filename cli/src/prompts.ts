@@ -10,17 +10,17 @@ const GITHUB_ACCEPT_HEADER = "application/vnd.github+json";
 const GITHUB_USER_AGENT = "@shbernal/pdfanki-cli";
 
 export interface PromptSummary {
-  name: string;
-  path: string;
+  readonly name: string;
+  readonly path: string;
 }
 
 export interface RemotePromptSummary {
-  name: string;
-  downloadUrl: string;
+  readonly name: string;
+  readonly downloadUrl: string;
 }
 
 interface InstallRemotePromptOptions {
-  force?: boolean;
+  readonly force?: boolean;
 }
 
 interface InstallRemotePromptResult {
@@ -115,7 +115,7 @@ async function fetchRemotePromptDirectory(): Promise<RemotePromptSummary[]> {
 
   return entries
     .filter((entry) => markdownFileName(entry) !== undefined)
-    .map((entry) => {
+    .map((entry): RemotePromptSummary => {
       if (!isMarkdownPromptEntry(entry)) {
         throw new Error(
           "Failed to fetch remote prompts from GitHub: markdown prompt entry missing download_url.",
@@ -168,7 +168,7 @@ export async function listLocalPrompts(): Promise<PromptSummary[]> {
 
   return entries
     .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
-    .map((entry) => ({
+    .map((entry): PromptSummary => ({
       name: entry.name.replace(/\.md$/i, ""),
       path: join(paths.promptsDir, entry.name),
     }))

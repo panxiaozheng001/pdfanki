@@ -17,7 +17,7 @@ import { describeError } from "./errors.js";
 import { parseSectionCards } from "./flashcardPolicy.js";
 import {
   generateFlashcards as generateFlashcardsFromServer,
-  type ContentSection,
+  type ReadonlyContentSection,
 } from "./pdfankiRuntime.js";
 import { runWithProgressHeartbeat, type CliUi } from "./ui/cliUi.js";
 import {
@@ -49,35 +49,35 @@ const PROVIDER_MODEL_HINTS: Record<SupportedProvider, RegExp> = {
 };
 
 export interface GenerationArgs extends ParsedArgs {
-  provider?: unknown;
-  model?: unknown;
-  codexReasoningEffort?: unknown;
-  codexProfile?: unknown;
+  readonly provider?: unknown;
+  readonly model?: unknown;
+  readonly codexReasoningEffort?: unknown;
+  readonly codexProfile?: unknown;
 }
 
 interface CodexOptions {
-  reasoningEffort?: CodexReasoningEffort;
-  profile?: string;
+  readonly reasoningEffort?: CodexReasoningEffort;
+  readonly profile?: string;
 }
 
 /** Which provider answers, as which model, with which credential. */
 export interface GenerationPlan {
-  provider: SupportedProvider;
-  model: string;
-  requiresApiKey: boolean;
-  apiKeyLookup: ApiKeyLookup | null;
-  codexOptions: CodexOptions | undefined;
+  readonly provider: SupportedProvider;
+  readonly model: string;
+  readonly requiresApiKey: boolean;
+  readonly apiKeyLookup: ApiKeyLookup | null;
+  readonly codexOptions: CodexOptions | undefined;
 }
 
 interface GenerateFlashcardsRequest {
-  provider: SupportedProvider;
-  model: string;
-  apiKey?: string;
-  prompt: string;
-  content: string;
-  codex?: {
-    reasoningEffort?: CodexReasoningEffort;
-    profile?: string;
+  readonly provider: SupportedProvider;
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly prompt: string;
+  readonly content: string;
+  readonly codex?: {
+    readonly reasoningEffort?: CodexReasoningEffort;
+    readonly profile?: string;
   };
 }
 
@@ -105,7 +105,7 @@ export function buildDeck(deckTitle: string, cards: readonly Card[]): Deck {
 function resolveCodexOptions(
   args: GenerationArgs,
   provider: SupportedProvider,
-  providerSettings: ProviderSettings | undefined,
+  providerSettings: Readonly<ProviderSettings> | undefined,
 ): CodexOptions | undefined {
   const hasCodexReasoningEffortFlag = args.codexReasoningEffort !== undefined;
   const hasCodexProfileFlag = args.codexProfile !== undefined;
@@ -175,15 +175,17 @@ export function resolveGenerationPlan(
   return { provider, model, requiresApiKey, apiKeyLookup, codexOptions };
 }
 
-export function logDryRunSummary(options: {
-  ui: CliUi;
-  plan: GenerationPlan;
-  prompt: { name: string; path: string };
-  sectionCount: number;
-  outputPath: string;
-  defaultOutputDir: string | undefined;
-  usedDefaultOutputPath: boolean;
-}): void {
+export function logDryRunSummary(
+  options: Readonly<{
+    ui: CliUi;
+    plan: GenerationPlan;
+    prompt: Readonly<{ name: string; path: string }>;
+    sectionCount: number;
+    outputPath: string;
+    defaultOutputDir: string | undefined;
+    usedDefaultOutputPath: boolean;
+  }>,
+): void {
   const { ui, plan, prompt, sectionCount, outputPath, defaultOutputDir, usedDefaultOutputPath } =
     options;
   const { logger, useColor } = ui;
@@ -238,14 +240,16 @@ interface ResponseCapture {
  * needs the last response most when this throws - that is what gets written
  * beside the partial deck.
  */
-async function generateSectionCards(options: {
-  request: GenerateFlashcardsRequest;
-  progressLabel: string | null;
-  position: number;
-  ui: CliUi;
-  capture: ResponseCapture;
-  reportRetry: ((headline: string, detail: string) => void) | null;
-}): Promise<Card[]> {
+async function generateSectionCards(
+  options: Readonly<{
+    request: GenerateFlashcardsRequest;
+    progressLabel: string | null;
+    position: number;
+    ui: CliUi;
+    capture: ResponseCapture;
+    reportRetry: ((headline: string, detail: string) => void) | null;
+  }>,
+): Promise<Card[]> {
   const { request, progressLabel, position, ui, capture, reportRetry } = options;
 
   for (let attempt = 1; attempt <= MAX_MARKDOWN_VALIDATION_ATTEMPTS; attempt++) {
@@ -295,16 +299,18 @@ async function generateSectionCards(options: {
  * What a failed section leaves behind: the cards that did make it, and the model
  * response that did not. Both go beside the output the run was aiming for.
  */
-async function writeSectionFailureArtifacts(options: {
-  logger: Logger;
-  outputPath: string;
-  artifactBaseName: string;
-  deckTitle: string;
-  cards: readonly Card[];
-  rawResponse: string | null;
-  position: number;
-  sectionLabel: string;
-}): Promise<void> {
+async function writeSectionFailureArtifacts(
+  options: Readonly<{
+    logger: Logger;
+    outputPath: string;
+    artifactBaseName: string;
+    deckTitle: string;
+    cards: readonly Card[];
+    rawResponse: string | null;
+    position: number;
+    sectionLabel: string;
+  }>,
+): Promise<void> {
   const {
     logger,
     outputPath,
@@ -337,32 +343,34 @@ async function writeSectionFailureArtifacts(options: {
 }
 
 export interface GenerateAllCardsOptions {
-  sections: readonly ContentSection[];
-  plan: GenerationPlan;
-  promptContents: string;
-  ui: CliUi;
-  deckTitle: string;
-  outputPath: string;
-  artifactBaseName: string;
-  dryRun: boolean;
+  readonly sections: readonly ReadonlyContentSection[];
+  readonly plan: GenerationPlan;
+  readonly promptContents: string;
+  readonly ui: CliUi;
+  readonly deckTitle: string;
+  readonly outputPath: string;
+  readonly artifactBaseName: string;
+  readonly dryRun: boolean;
 }
 
 /**
  * What a failed section reports before the run gives up: the timing line, and
  * either the artifacts or the note saying a dry run skipped them.
  */
-async function reportSectionFailure(options: {
-  ui: CliUi;
-  sectionLabel: string;
-  sectionStart: number;
-  position: number;
-  cardsSoFar: readonly Card[];
-  rawResponse: string | null;
-  deckTitle: string;
-  outputPath: string;
-  artifactBaseName: string;
-  dryRun: boolean;
-}): Promise<void> {
+async function reportSectionFailure(
+  options: Readonly<{
+    ui: CliUi;
+    sectionLabel: string;
+    sectionStart: number;
+    position: number;
+    cardsSoFar: readonly Card[];
+    rawResponse: string | null;
+    deckTitle: string;
+    outputPath: string;
+    artifactBaseName: string;
+    dryRun: boolean;
+  }>,
+): Promise<void> {
   const { ui, sectionLabel, sectionStart, position, cardsSoFar, rawResponse } = options;
   const { deckTitle, outputPath, artifactBaseName, dryRun } = options;
   const { logger } = ui;
@@ -390,18 +398,18 @@ async function reportSectionFailure(options: {
 }
 
 interface SectionRunOptions {
-  section: ContentSection;
-  position: number;
-  totalSections: number;
-  baseRequest: Omit<GenerateFlashcardsRequest, "content">;
-  ui: CliUi;
-  useProgress: boolean;
-  showPerSectionLogs: boolean;
-  cardsSoFar: readonly Card[];
-  deckTitle: string;
-  outputPath: string;
-  artifactBaseName: string;
-  dryRun: boolean;
+  readonly section: ReadonlyContentSection;
+  readonly position: number;
+  readonly totalSections: number;
+  readonly baseRequest: Omit<GenerateFlashcardsRequest, "content">;
+  readonly ui: CliUi;
+  readonly useProgress: boolean;
+  readonly showPerSectionLogs: boolean;
+  readonly cardsSoFar: readonly Card[];
+  readonly deckTitle: string;
+  readonly outputPath: string;
+  readonly artifactBaseName: string;
+  readonly dryRun: boolean;
 }
 
 /** One section: ask, time it, and on failure leave the partial work behind. */

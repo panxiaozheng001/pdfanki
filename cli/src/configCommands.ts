@@ -57,8 +57,8 @@ export async function handleListRemotePrompts(args: UiBuildArgs): Promise<void> 
 
 export async function handleGetPrompt(
   args: UiBuildArgs & {
-    name?: string;
-    force?: unknown;
+    readonly name?: string;
+    readonly force?: unknown;
   },
 ): Promise<void> {
   let ui: CliUi | null = null;

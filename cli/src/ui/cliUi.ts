@@ -15,19 +15,19 @@ function isCI(): boolean {
 }
 
 export interface UiBuildArgs extends ParsedArgs {
-  verbose?: unknown;
-  quiet?: unknown;
-  color?: unknown;
-  spinner?: unknown;
+  readonly verbose?: unknown;
+  readonly quiet?: unknown;
+  readonly color?: unknown;
+  readonly spinner?: unknown;
 }
 
 export interface CliUi {
-  logger: Logger;
-  spinner: Spinner;
-  progress: ProgressBar;
-  useColor: boolean;
-  animationsEnabled: boolean;
-  progressEnabled: boolean;
+  readonly logger: Logger;
+  readonly spinner: Spinner;
+  readonly progress: ProgressBar;
+  readonly useColor: boolean;
+  readonly animationsEnabled: boolean;
+  readonly progressEnabled: boolean;
 }
 
 export function buildCliUi(args: UiBuildArgs): CliUi {
@@ -75,14 +75,16 @@ export async function runWithSpinner<T>(
   }
 }
 
-export async function runWithProgressHeartbeat<T>(options: {
-  progress: ProgressBar;
-  current: number;
-  label: string;
-  action: () => Promise<T>;
-  intervalMs?: number;
-  animateSpinner?: boolean;
-}): Promise<T> {
+export async function runWithProgressHeartbeat<T>(
+  options: Readonly<{
+    progress: ProgressBar;
+    current: number;
+    label: string;
+    action: () => Promise<T>;
+    intervalMs?: number;
+    animateSpinner?: boolean;
+  }>,
+): Promise<T> {
   const { progress, current, label, action, intervalMs = 1000, animateSpinner = false } = options;
   const spinnerFrames = ["|", "/", "-", "\\"];
   let frameIndex = 0;

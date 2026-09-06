@@ -1,8 +1,8 @@
 export interface ApiKeyLookup {
-  envVar: string;
+  readonly envVar: string;
   /* Required and nullable rather than optional: the lookup always answers, and
      undefined is the answer "that variable is not set", which every caller reads. */
-  apiKey: string | undefined;
+  readonly apiKey: string | undefined;
 }
 
 export function getProviderEnvVarName(provider: string): string {

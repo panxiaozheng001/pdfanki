@@ -14,9 +14,9 @@ import {
 /** The blank index a user edits to tell a PDF conversion where its chapters are. */
 
 export interface IndexTemplateEntry {
-  start: number;
-  end: number;
-  title?: string;
+  readonly start: number;
+  readonly end: number;
+  readonly title?: string;
 }
 
 /** How many pages a placeholder section spans, so the template is editable. */
@@ -33,7 +33,7 @@ export function buildIndexTemplate(count: number): IndexTemplateEntry[] {
   return items;
 }
 
-export function formatIndexTemplate(entries: IndexTemplateEntry[]): string {
+export function formatIndexTemplate(entries: readonly IndexTemplateEntry[]): string {
   if (entries.length === 0) {
     return "[]\n";
   }
@@ -79,9 +79,9 @@ export function resolveIndexTemplatePath(
 
 export async function handleIndexTemplate(
   args: UiBuildArgs & {
-    count?: unknown;
-    out?: unknown;
-    fromFile?: unknown;
+    readonly count?: unknown;
+    readonly out?: unknown;
+    readonly fromFile?: unknown;
   },
 ): Promise<void> {
   let ui: CliUi | null = null;

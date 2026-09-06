@@ -254,12 +254,54 @@
     ],
     "import/max-dependencies": ["error", { "max": 15 }],
 
-    // Both siblings run this rule with an allow list. Here it reports 185 times,
-    // because the data model - `BookJson`, `ContentSection[]`, the undo stack -
-    // is mutable by design and the yargs argv is an object yargs owns. Making
-    // those readonly is a refactor of the whole package, not a lint fix, and it
-    // is written down as `[pdfanki-readonly-params]` rather than lost here.
-    "typescript/prefer-readonly-parameter-types": "off",
+    "typescript/prefer-readonly-parameter-types": [
+      "error",
+      {
+        "treatMethodsAsReadonly": true,
+        "allow": [
+          { "from": "lib", "name": "ArrayBuffer" },
+          { "from": "lib", "name": "Date" },
+          { "from": "lib", "name": "Error" },
+          { "from": "lib", "name": "Uint8Array" },
+          { "from": "package", "package": "@types/node", "name": "Buffer" },
+
+          // `process.stdout` and `process.stderr`. Node owns the stream, the
+          // terminal owns its state, and every use here is a `write` - the one
+          // thing a readonly view of it could not express.
+          { "from": "package", "package": "@types/node", "name": "WriteStream" },
+
+          // A `withFileTypes` directory entry. `readdir` builds it, the two
+          // callbacks in `cli/src/prompts.ts` call `isFile()` and read `name`,
+          // and Node's declaration is not this package's to restate.
+          { "from": "package", "package": "@types/node", "name": "Dirent" },
+
+          // A regex match is a mutable array handed over by the engine. Every
+          // callback here only destructures it, and there is no way to restate
+          // the lib type.
+          { "from": "lib", "name": "RegExpExecArray" },
+          { "from": "lib", "name": "RegExpMatchArray" },
+
+          // The `epub` library's own parser handle and OPF metadata. `EPub` is a
+          // class with mutable fields the library writes as it parses, and
+          // `Metadata` carries a `subjects?: string[]` under an index signature.
+          // `packages/pdfanki/src/epubJsonUtils.ts` only reads both, and neither
+          // can be restated from here.
+          { "from": "package", "package": "epub", "name": "EPub" },
+          { "from": "package", "package": "epub", "name": "Metadata" },
+
+          // A block off an Anthropic message. The union is the SDK's, several
+          // arms carry mutable arrays of their own, and the callback that takes
+          // one in `providers.ts` reads a discriminant and nothing else.
+          { "from": "package", "package": "@anthropic-ai/sdk", "name": "ContentBlock" },
+
+          // The one-field box `generateSectionCards` writes the model's last
+          // response into. It is an out-parameter on purpose - the caller needs
+          // that response most when the call throws - and being mutated is the
+          // one thing this rule has no way to say.
+          { "from": "file", "name": "ResponseCapture" }
+        ]
+      }
+    ],
 
     // The text pipelines are tables: a run of `.replace()` calls, each with the
     // entity or character class it handles named beside it. Moving those onto
@@ -288,7 +330,15 @@
       // it now meets.
       "files": ["cli/src/index.ts"],
       "rules": {
-        "unicorn/max-nested-calls": "off"
+        "unicorn/max-nested-calls": "off",
+
+        // Both halves of the yargs contract are objects yargs owns and hands to
+        // a callback: the `Argv` a builder is given, and the parsed argv a
+        // handler is given, whose type yargs infers per command from the options
+        // registered on it. Neither can be restated as readonly from here.
+        // `ankimd/cli/src/index.ts` carries the same exemption for the same
+        // reason; nothing else in either repo needs it.
+        "typescript/prefer-readonly-parameter-types": "off"
       }
     },
     {
@@ -322,6 +372,11 @@
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/no-unsafe-return": "off",
+
+        // Same missing program, one rule further on: a fixture builder or a fake
+        // runner declares no parameter types, and `any` is not a readonly type,
+        // so every one of them reports. There is nothing here to annotate.
+        "typescript/prefer-readonly-parameter-types": "off",
 
         // A `test()` callback is a declarative block, not a function with logic,
         // so a suite's length and statement count track how many cases it covers.

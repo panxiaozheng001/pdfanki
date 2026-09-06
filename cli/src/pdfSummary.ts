@@ -1,6 +1,6 @@
 import { parse } from "node:path";
 
-import type { BookJson, ContentSection } from "./pdfankiRuntime.js";
+import type { ReadonlyBookJson, ReadonlyContentSection } from "./pdfankiRuntime.js";
 import { formatCount } from "./ui/format.js";
 import type { Logger } from "./ui/logger.js";
 
@@ -29,6 +29,14 @@ function formatOverlapRange(start: number, end: number): string {
   return start === end ? `page ${start}` : `pages ${start}-${end}`;
 }
 
+/** One section's page range, parsed out of its `pageRange` string. */
+interface SectionRange {
+  readonly title: string;
+  readonly range: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 /** Two sections whose page ranges claim some of the same pages. */
 export interface PageOverlap {
   leftTitle: string;
@@ -39,9 +47,9 @@ export interface PageOverlap {
   overlapEnd: number;
 }
 
-export function findPageOverlaps(sections: ContentSection[]): PageOverlap[] {
+export function findPageOverlaps(sections: readonly ReadonlyContentSection[]): PageOverlap[] {
   const ranges = sections
-    .map((section) => {
+    .map((section): SectionRange | null => {
       const { pageRange } = section;
       if (!pageRange) {
         return null;
@@ -86,7 +94,7 @@ export function findPageOverlaps(sections: ContentSection[]): PageOverlap[] {
   return overlaps;
 }
 
-function buildPdfSectionSummary(section: ContentSection): string {
+function buildPdfSectionSummary(section: ReadonlyContentSection): string {
   const title = section.title?.trim() || `Section ${section.index}`;
   const pageRange = section.pageRange ? ` | pages: ${section.pageRange}` : "";
   const pageCount =
@@ -97,12 +105,14 @@ function buildPdfSectionSummary(section: ContentSection): string {
   return `- ${title}${pageRange}${pageCount} | chars: ${formatCount(charCount)}`;
 }
 
-export function logPdfExtractionSummary(options: {
-  logger: Logger;
-  sourcePath: string;
-  book: BookJson;
-  indexProvided: boolean;
-}) {
+export function logPdfExtractionSummary(
+  options: Readonly<{
+    logger: Logger;
+    sourcePath: string;
+    book: ReadonlyBookJson;
+    indexProvided: boolean;
+  }>,
+) {
   const { logger, sourcePath, book, indexProvided } = options;
   const fileName = parse(sourcePath).base;
   const totalPages = book.metadata?.totalPages;

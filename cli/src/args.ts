@@ -6,9 +6,10 @@ import { SUPPORTED_PROVIDERS, type SupportedProvider } from "./config.js";
  * than trusted here, which is why they are `unknown`. The index signature is
  * what makes a yargs argv assignable to these shapes at all — without it an
  * all-optional interface is a weak type, and TypeScript rejects an object that
- * shares no property with it.
+ * shares no property with it. Readonly because a handler reads its argv and
+ * yargs owns the object it was handed.
  */
-export type ParsedArgs = Record<string, unknown>;
+export type ParsedArgs = Readonly<Record<string, unknown>>;
 
 /** A user-supplied name reduced to something safe to use as a filename stem. */
 export function toKebabAlnum(value: string): string {
@@ -38,7 +39,7 @@ export function normalizePathArg(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function normalizePreviewCliArgs(args: string[]): string[] {
+export function normalizePreviewCliArgs(args: readonly string[]): string[] {
   const normalizedArgs: string[] = [];
 
   /* `--preview 200` is rewritten to `--preview --preview-chars 200`, so a pass
@@ -122,7 +123,7 @@ export function normalizeIntegerOption(
 /** Whether `--preview` was typed, and how. */
 export type PreviewFlagMode = "enabled" | "disabled" | "unset";
 
-export function getPreviewFlagMode(args: string[]): PreviewFlagMode {
+export function getPreviewFlagMode(args: readonly string[]): PreviewFlagMode {
   for (const arg of args) {
     if (arg === "--no-preview" || arg === "--preview=false") {
       return "disabled";

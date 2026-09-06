@@ -17,6 +17,8 @@ export type {
   ConvertFileOptions,
   ConvertFileResult,
   EpubTitleFilter,
+  ReadonlyBookJson,
+  ReadonlyContentSection,
   SupportedProvider,
 } from "@shbernal/pdfanki/server";
 

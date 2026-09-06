@@ -34,8 +34,8 @@ import {
   convertFileFromPath,
   isBookJson,
   validateJsonStructure,
-  type BookJson,
   type ConvertFileOptions,
+  type ReadonlyBookJson,
 } from "./pdfankiRuntime.js";
 import { logPdfExtractionSummary } from "./pdfSummary.js";
 import { defaultTemplate } from "./template.js";
@@ -68,29 +68,29 @@ type StructuredSourceKind = Exclude<WorkflowSourceKind, "md">;
 
 type WorkflowCommandArgs = UiBuildArgs &
   GenerationArgs & {
-    input?: unknown;
-    out?: unknown;
-    fullFidelity?: unknown;
-    index?: unknown;
-    indexRanges?: unknown;
-    startSection?: unknown;
-    endSection?: unknown;
-    excludeSections?: unknown;
-    minChar?: unknown;
-    preview?: unknown;
-    previewChars?: unknown;
-    prompt?: unknown;
-    deckTitle?: unknown;
-    debug?: unknown;
-    dryRun?: unknown;
-    remoteMedia?: unknown;
-    remoteTimeout?: unknown;
+    readonly input?: unknown;
+    readonly out?: unknown;
+    readonly fullFidelity?: unknown;
+    readonly index?: unknown;
+    readonly indexRanges?: unknown;
+    readonly startSection?: unknown;
+    readonly endSection?: unknown;
+    readonly excludeSections?: unknown;
+    readonly minChar?: unknown;
+    readonly preview?: unknown;
+    readonly previewChars?: unknown;
+    readonly prompt?: unknown;
+    readonly deckTitle?: unknown;
+    readonly debug?: unknown;
+    readonly dryRun?: unknown;
+    readonly remoteMedia?: unknown;
+    readonly remoteTimeout?: unknown;
   };
 
 interface StructuredSourceResult {
-  data: BookJson;
-  fileType: StructuredSourceKind;
-  sourcePath: string;
+  readonly data: ReadonlyBookJson;
+  readonly fileType: StructuredSourceKind;
+  readonly sourcePath: string;
 }
 
 function resolveOutputPath(
@@ -117,11 +117,11 @@ function resolveOutputPath(
 
 /** Where the artifact goes, and whether the user said so or settings.json did. */
 interface OutputPlan {
-  outputPath: string;
-  outputBaseName: string;
-  defaultOutputDir: string | undefined;
-  usedDefaultOutputPath: boolean;
-  artifactBaseName: string;
+  readonly outputPath: string;
+  readonly outputBaseName: string;
+  readonly defaultOutputDir: string | undefined;
+  readonly usedDefaultOutputPath: boolean;
+  readonly artifactBaseName: string;
 }
 
 function resolveOutputPlan(
@@ -155,13 +155,13 @@ function resolveOutputPlan(
 
 /** The flags that narrow what gets read out of a PDF or EPUB. */
 interface SourceOptions {
-  indexPath: string | undefined;
-  indexRanges: string | undefined;
-  excludeChapters: string | undefined;
-  minChars: number | undefined;
-  previewChars: number | undefined;
-  startChapter: number | undefined;
-  endChapter: number | undefined;
+  readonly indexPath: string | undefined;
+  readonly indexRanges: string | undefined;
+  readonly excludeChapters: string | undefined;
+  readonly minChars: number | undefined;
+  readonly previewChars: number | undefined;
+  readonly startChapter: number | undefined;
+  readonly endChapter: number | undefined;
 }
 
 function readSourceOptions(args: WorkflowCommandArgs): SourceOptions {
@@ -203,7 +203,7 @@ function readSourceOptions(args: WorkflowCommandArgs): SourceOptions {
   };
 }
 
-function buildBasicExtractPayload(book: BookJson): {
+function buildBasicExtractPayload(book: ReadonlyBookJson): {
   content: { index: number; title: string | undefined; text: string | undefined }[];
 } {
   return {
@@ -237,15 +237,17 @@ function resolvePreview(
   return typeof previewChars === "number" ? true : configured;
 }
 
-async function loadStructuredSource(options: {
-  sourceKind: StructuredSourceKind;
-  inputPath: string;
-  ui: CliUi;
-  settings: CliSettings;
-  source: SourceOptions;
-  debug: boolean;
-  fullFidelity: boolean;
-}): Promise<StructuredSourceResult> {
+async function loadStructuredSource(
+  options: Readonly<{
+    sourceKind: StructuredSourceKind;
+    inputPath: string;
+    ui: CliUi;
+    settings: CliSettings;
+    source: SourceOptions;
+    debug: boolean;
+    fullFidelity: boolean;
+  }>,
+): Promise<StructuredSourceResult> {
   const { sourceKind, inputPath, ui, settings, source, debug, fullFidelity } = options;
   const { indexPath, indexRanges, startChapter, endChapter, excludeChapters, minChars } = source;
 
@@ -293,16 +295,18 @@ async function loadStructuredSource(options: {
  * §3.3 of the format: a deck that lost something on the way out says so. A silent
  * success over skipped cards is a conformance bug rather than a tidy UI.
  */
-async function buildAnkiPackage(options: {
-  deck: Deck;
-  outputPath: string;
-  deckTitle: string;
-  logger: Logger;
-  /* Absent for a deck pdfanki just generated, which names no image and has no
-     directory to look in. Without a resolver a reference stays as written, which
-     is what the library does and what this did before. */
-  media?: MediaOptions;
-}): Promise<void> {
+async function buildAnkiPackage(
+  options: Readonly<{
+    deck: Deck;
+    outputPath: string;
+    deckTitle: string;
+    logger: Logger;
+    /* Absent for a deck pdfanki just generated, which names no image and has no
+       directory to look in. Without a resolver a reference stays as written, which
+       is what the library does and what this did before. */
+    media?: Readonly<MediaOptions>;
+  }>,
+): Promise<void> {
   const { deck, outputPath, deckTitle, logger, media } = options;
   const diagnostics = await writeApkg(deck, outputPath, {
     deckName: deckTitle,
@@ -317,15 +321,17 @@ async function buildAnkiPackage(options: {
 }
 
 /** `md anki`: the user's own deck rather than one pdfanki just generated. */
-async function runMarkdownToAnki(options: {
-  ui: CliUi;
-  inputPath: string;
-  output: OutputPlan;
-  deckTitleArg: string | undefined;
-  dryRun: boolean;
-  remoteMedia: boolean;
-  remoteTimeoutMs: number;
-}): Promise<void> {
+async function runMarkdownToAnki(
+  options: Readonly<{
+    ui: CliUi;
+    inputPath: string;
+    output: OutputPlan;
+    deckTitleArg: string | undefined;
+    dryRun: boolean;
+    remoteMedia: boolean;
+    remoteTimeoutMs: number;
+  }>,
+): Promise<void> {
   const { ui, inputPath, output, deckTitleArg, dryRun, remoteMedia, remoteTimeoutMs } = options;
   const { logger, spinner } = ui;
   const { outputPath, usedDefaultOutputPath } = output;
@@ -380,15 +386,17 @@ async function runMarkdownToAnki(options: {
 }
 
 /** `pdf json` and `epub json`: extraction, with no model involved. */
-async function writeExtractedJson(options: {
-  ui: CliUi;
-  inputPath: string;
-  output: OutputPlan;
-  structured: StructuredSourceResult;
-  source: SourceOptions;
-  fullFidelity: boolean;
-  dryRun: boolean;
-}): Promise<void> {
+async function writeExtractedJson(
+  options: Readonly<{
+    ui: CliUi;
+    inputPath: string;
+    output: OutputPlan;
+    structured: StructuredSourceResult;
+    source: SourceOptions;
+    fullFidelity: boolean;
+    dryRun: boolean;
+  }>,
+): Promise<void> {
   const { ui, inputPath, output, structured, source, fullFidelity, dryRun } = options;
   const { logger, spinner } = ui;
   const { outputPath, usedDefaultOutputPath } = output;
@@ -429,17 +437,19 @@ async function writeExtractedJson(options: {
 }
 
 /** The generated cards, as markdown or as a package. */
-async function writeGeneratedDeck(options: {
-  ui: CliUi;
-  targetKind: WorkflowTargetKind;
-  deck: Deck;
-  deckTitle: string;
-  inputPath: string;
-  sourceLabel: string;
-  output: OutputPlan;
-  prompt: { name: string; path: string };
-  dryRun: boolean;
-}): Promise<void> {
+async function writeGeneratedDeck(
+  options: Readonly<{
+    ui: CliUi;
+    targetKind: WorkflowTargetKind;
+    deck: Deck;
+    deckTitle: string;
+    inputPath: string;
+    sourceLabel: string;
+    output: OutputPlan;
+    prompt: Readonly<{ name: string; path: string }>;
+    dryRun: boolean;
+  }>,
+): Promise<void> {
   const { ui, targetKind, deck, deckTitle, inputPath, sourceLabel, output, prompt, dryRun } =
     options;
   const { logger, spinner } = ui;
@@ -486,16 +496,18 @@ async function writeGeneratedDeck(options: {
 }
 
 /** Everything from an extracted book to a deck: pick a provider, ask, write. */
-async function runGenerationWorkflow(options: {
-  ui: CliUi;
-  targetKind: WorkflowTargetKind;
-  args: WorkflowCommandArgs;
-  settings: CliSettings;
-  inputPath: string;
-  output: OutputPlan;
-  structured: StructuredSourceResult;
-  dryRun: boolean;
-}): Promise<void> {
+async function runGenerationWorkflow(
+  options: Readonly<{
+    ui: CliUi;
+    targetKind: WorkflowTargetKind;
+    args: WorkflowCommandArgs;
+    settings: CliSettings;
+    inputPath: string;
+    output: OutputPlan;
+    structured: StructuredSourceResult;
+    dryRun: boolean;
+  }>,
+): Promise<void> {
   const { ui, targetKind, args, settings, inputPath, output, structured, dryRun } = options;
   const { logger, spinner } = ui;
 
@@ -562,13 +574,15 @@ async function runGenerationWorkflow(options: {
   });
 }
 
-async function executeWorkflow(options: {
-  sourceKind: WorkflowSourceKind;
-  targetKind: WorkflowTargetKind;
-  args: WorkflowCommandArgs;
-  previewFlagMode: PreviewFlagMode;
-  ui: CliUi;
-}): Promise<void> {
+async function executeWorkflow(
+  options: Readonly<{
+    sourceKind: WorkflowSourceKind;
+    targetKind: WorkflowTargetKind;
+    args: WorkflowCommandArgs;
+    previewFlagMode: PreviewFlagMode;
+    ui: CliUi;
+  }>,
+): Promise<void> {
   const { sourceKind, targetKind, args, previewFlagMode, ui } = options;
   const settings = await loadCliSettings(ui);
   const inputPath = normalizeRequiredInputPath(args.input);

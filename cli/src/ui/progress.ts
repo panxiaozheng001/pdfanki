@@ -1,8 +1,8 @@
 export interface ProgressBarOptions {
-  enabled: boolean;
-  useColor?: boolean;
-  stream?: NodeJS.WriteStream;
-  width?: number;
+  readonly enabled: boolean;
+  readonly useColor?: boolean;
+  readonly stream?: NodeJS.WriteStream;
+  readonly width?: number;
 }
 
 const ANSI_BRIGHT_BLUE = "\u001B[94m";
@@ -24,11 +24,11 @@ function formatDuration(durationMs: number): string {
 }
 
 export interface ProgressBar {
-  start: (total: number, label?: string) => void;
-  increment: (label?: string) => void;
-  update: (current: number, label?: string, activityFrame?: string) => void;
-  stop: () => void;
-  clear: () => void;
+  readonly start: (total: number, label?: string) => void;
+  readonly increment: (label?: string) => void;
+  readonly update: (current: number, label?: string, activityFrame?: string) => void;
+  readonly stop: () => void;
+  readonly clear: () => void;
 }
 
 export function createProgressBar(options: ProgressBarOptions): ProgressBar {

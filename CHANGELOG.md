@@ -25,6 +25,15 @@ Notable changes per release. Both published packages — `@shbernal/pdfanki` and
 
 ### Changed
 
+- **Every parameter that only reads is `readonly`.** `@shbernal/pdfanki` widened them
+  throughout: a deck, a section list, a chapter index, an options bag. Widening a
+  parameter accepts every caller it accepted before, and no return type changed — a
+  deck handed back is still a deck you can edit — so this is visible to TypeScript
+  consumers without being a break for any of them. `ReadonlyBookJson`,
+  `ReadonlyContentSection`, `ReadonlyIndexEntry` and their siblings are exported
+  beside the mutable originals, which stay: a deck is built up and edited on purpose,
+  and the types now say which side of that line each signature is on.
+
 - **`@ankimd/core` moved from 0.0.4 to 0.0.6.** Two fixes in it reach `md anki`
   directly: an image written as `](<name>)` or `](name "title")` was never packaged,
   because the reader only recognized `](name)`, and a media file whose name did not stay
