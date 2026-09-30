@@ -143,7 +143,13 @@ export function runCodexCli(
   options: CodexCliRunnerOptions,
 ): Promise<CodexCliRunnerResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(options.command, args, {
+    const isNodeScript = options.command.endsWith(".js") || options.command.endsWith(".mjs");
+    const [spawnCmd, spawnArgs] =
+      isNodeScript && process.platform === "win32"
+        ? [process.execPath, [options.command, ...args]]
+        : [options.command, args];
+
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       env: process.env,

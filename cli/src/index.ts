@@ -3,7 +3,7 @@ import yargs, { type Argv } from "yargs";
 import { hideBin } from "yargs/helpers";
 
 import { getPreviewFlagMode, normalizePreviewCliArgs } from "./args.js";
-import { CODEX_REASONING_EFFORTS, SUPPORTED_PROVIDERS } from "./config.js";
+import { AGY_REASONING_EFFORTS, CODEX_REASONING_EFFORTS, SUPPORTED_PROVIDERS } from "./config.js";
 import {
   handleGetPrompt,
   handleListLocalPrompts,
@@ -190,6 +190,11 @@ function withGenerationOptions<T>(command: Argv<T>): Argv<T> {
       type: "string",
       describe:
         "Codex-only config profile passed to codex exec --profile. The pdfanki --model/defaultModel still takes precedence for model selection.",
+    })
+    .option("agy-effort", {
+      type: "string",
+      choices: [...AGY_REASONING_EFFORTS],
+      describe: "Agy CLI reasoning effort override (low, medium, high, max).",
     });
 }
 

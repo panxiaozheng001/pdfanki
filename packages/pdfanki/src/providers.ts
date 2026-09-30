@@ -1,3 +1,9 @@
+import {
+  callAgyProvider,
+  loadAgyConfig,
+  type AgyCliRunner,
+  type AgyReasoningEffort,
+} from "./agyProvider.js";
 import { callCodexProvider, type CodexReasoningEffort } from "./codexProvider.js";
 import { describeError } from "./describeError.js";
 import { isList } from "./isList.js";
@@ -9,11 +15,12 @@ export type SupportedProvider =
   | "openai"
   | "deepseek"
   | "openrouter"
-  | "codex";
+  | "codex"
+  | "agy";
 
 export interface GenerateFlashcardsOptions {
-  readonly provider: SupportedProvider;
-  readonly model: string;
+  readonly provider?: SupportedProvider;
+  readonly model?: string;
   readonly apiKey?: string;
   readonly prompt: string;
   readonly content: string;
@@ -21,7 +28,19 @@ export interface GenerateFlashcardsOptions {
     readonly reasoningEffort?: CodexReasoningEffort;
     readonly profile?: string;
   };
+  readonly agy?: {
+    readonly effort?: AgyReasoningEffort;
+    readonly command?: string;
+    readonly configFile?: string;
+    readonly timeoutMs?: number;
+    readonly runner?: AgyCliRunner;
+  };
 }
+
+export type ResolvedGenerateFlashcardsOptions = GenerateFlashcardsOptions & {
+  readonly provider: SupportedProvider;
+  readonly model: string;
+};
 
 const GEMINI_TIMEOUT_MS = 180_000;
 const MS_PER_SECOND = 1000;
@@ -42,29 +61,47 @@ export function bookJsonToPlainText(book: ReadonlyBookJson): string {
 }
 
 export async function generateFlashcards(options: GenerateFlashcardsOptions): Promise<string> {
-  const { provider } = options;
-  if (provider !== "codex" && !options.apiKey) {
+  const agyConfig = loadAgyConfig(options.agy?.configFile);
+  const provider = options.provider ?? (agyConfig.provider as SupportedProvider) ?? "agy";
+  const model =
+    options.model?.trim() ||
+    (provider === "agy" ? agyConfig.model || "gemini-3.8-flash-medium" : "");
+
+  if (provider !== "codex" && provider !== "agy" && !options.apiKey) {
     throw new Error(`Missing API key for provider "${provider}".`);
   }
 
+  if (!model) {
+    throw new Error(`Missing model for provider "${provider}".`);
+  }
+
+  const resolvedOptions: ResolvedGenerateFlashcardsOptions = {
+    ...options,
+    provider,
+    model,
+  };
+
   switch (provider) {
     case "gemini": {
-      return callGemini(options);
+      return callGemini(resolvedOptions);
     }
     case "anthropic": {
-      return callAnthropic(options);
+      return callAnthropic(resolvedOptions);
     }
     case "openai": {
-      return callOpenAI(options);
+      return callOpenAI(resolvedOptions);
     }
     case "deepseek": {
-      return callDeepSeek(options);
+      return callDeepSeek(resolvedOptions);
     }
     case "openrouter": {
-      return callOpenRouter(options);
+      return callOpenRouter(resolvedOptions);
     }
     case "codex": {
-      return callCodex(options);
+      return callCodex(resolvedOptions);
+    }
+    case "agy": {
+      return callAgy(resolvedOptions);
     }
     default: {
       throw new Error(`Unsupported provider "${String(provider)}".`);
@@ -72,7 +109,20 @@ export async function generateFlashcards(options: GenerateFlashcardsOptions): Pr
   }
 }
 
-async function callGemini(options: GenerateFlashcardsOptions): Promise<string> {
+async function callAgy(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
+  return callAgyProvider({
+    prompt: options.prompt,
+    content: options.content,
+    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.agy?.effort === undefined ? {} : { effort: options.agy.effort }),
+    ...(options.agy?.command === undefined ? {} : { command: options.agy.command }),
+    ...(options.agy?.configFile === undefined ? {} : { configFile: options.agy.configFile }),
+    ...(options.agy?.timeoutMs === undefined ? {} : { timeoutMs: options.agy.timeoutMs }),
+    ...(options.agy?.runner === undefined ? {} : { runner: options.agy.runner }),
+  });
+}
+
+async function callGemini(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   const { prompt, content, apiKey, model } = options;
   try {
     const { GoogleGenAI } = await import("@google/genai");
@@ -105,7 +155,7 @@ async function callGemini(options: GenerateFlashcardsOptions): Promise<string> {
   }
 }
 
-async function callAnthropic(options: GenerateFlashcardsOptions): Promise<string> {
+async function callAnthropic(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   const { prompt, content, apiKey, model } = options;
   const { Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
@@ -131,14 +181,14 @@ async function callAnthropic(options: GenerateFlashcardsOptions): Promise<string
   return firstTextBlock.text.trim();
 }
 
-async function callOpenAI(options: GenerateFlashcardsOptions): Promise<string> {
+async function callOpenAI(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   return callOpenAICompatible({
     ...options,
     providerName: "OpenAI",
   });
 }
 
-async function callDeepSeek(options: GenerateFlashcardsOptions): Promise<string> {
+async function callDeepSeek(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   return callOpenAICompatible({
     ...options,
     providerName: "DeepSeek",
@@ -146,7 +196,7 @@ async function callDeepSeek(options: GenerateFlashcardsOptions): Promise<string>
   });
 }
 
-async function callOpenRouter(options: GenerateFlashcardsOptions): Promise<string> {
+async function callOpenRouter(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   return callOpenAICompatible({
     ...options,
     providerName: "OpenRouter",
@@ -162,7 +212,7 @@ async function callOpenRouter(options: GenerateFlashcardsOptions): Promise<strin
   });
 }
 
-async function callCodex(options: GenerateFlashcardsOptions): Promise<string> {
+async function callCodex(options: ResolvedGenerateFlashcardsOptions): Promise<string> {
   return callCodexProvider({
     prompt: options.prompt,
     content: options.content,
@@ -174,7 +224,7 @@ async function callCodex(options: GenerateFlashcardsOptions): Promise<string> {
   });
 }
 
-type OpenAICompatibleOptions = GenerateFlashcardsOptions & {
+type OpenAICompatibleOptions = ResolvedGenerateFlashcardsOptions & {
   readonly providerName: string;
   readonly baseURL?: string;
   readonly defaultHeaders?: Readonly<Record<string, string>>;

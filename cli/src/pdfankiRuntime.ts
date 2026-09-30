@@ -12,6 +12,8 @@ const clientModule: ClientModule = useWorkspaceSource
   : await import("@shbernal/pdfanki/client");
 
 export type {
+  AgyConfig,
+  AgyReasoningEffort,
   BookJson,
   ContentSection,
   ConvertFileOptions,
@@ -36,6 +38,9 @@ export const convertFileFromPath: ServerModule["convertFileFromPath"] =
   serverModule.convertFileFromPath;
 export const generateFlashcards: ServerModule["generateFlashcards"] =
   serverModule.generateFlashcards;
+export const AGY_REASONING_EFFORTS: ServerModule["AGY_REASONING_EFFORTS"] =
+  serverModule.AGY_REASONING_EFFORTS;
+export const loadAgyConfig: ServerModule["loadAgyConfig"] = serverModule.loadAgyConfig;
 
 export const isBookJson: ClientModule["isBookJson"] = clientModule.isBookJson;
 export const validateJsonStructure: ClientModule["validateJsonStructure"] =

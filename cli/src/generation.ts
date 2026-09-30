@@ -5,8 +5,10 @@ import { renderMarkdown, type Card, type Deck } from "@ankimd/core";
 
 import { optionalProviderArg, optionalStringArg, type ParsedArgs } from "./args.js";
 import {
+  normalizeAgyReasoningEffort,
   normalizeCodexProfile,
   normalizeCodexReasoningEffort,
+  type AgyReasoningEffort,
   type CodexReasoningEffort,
   type ProviderSettings,
   type Settings,
@@ -17,6 +19,7 @@ import { describeError } from "./errors.js";
 import { parseSectionCards } from "./flashcardPolicy.js";
 import {
   generateFlashcards as generateFlashcardsFromServer,
+  loadAgyConfig,
   type ReadonlyContentSection,
 } from "./pdfankiRuntime.js";
 import { runWithProgressHeartbeat, type CliUi } from "./ui/cliUi.js";
@@ -46,6 +49,7 @@ const PROVIDER_MODEL_HINTS: Record<SupportedProvider, RegExp> = {
   deepseek: /^deepseek/i,
   openrouter: /^(?:openrouter\/)?[a-z0-9._-]+\/[a-z0-9._-]+(?:\/[a-z0-9._-]+)?$/i,
   codex: /^(?:gpt|o\d|codex)/i,
+  agy: /^(?:gemini|claude|gpt|o\d|codex)/i,
 };
 
 export interface GenerationArgs extends ParsedArgs {
@@ -53,11 +57,16 @@ export interface GenerationArgs extends ParsedArgs {
   readonly model?: unknown;
   readonly codexReasoningEffort?: unknown;
   readonly codexProfile?: unknown;
+  readonly agyEffort?: unknown;
 }
 
 interface CodexOptions {
   readonly reasoningEffort?: CodexReasoningEffort;
   readonly profile?: string;
+}
+
+interface AgyOptions {
+  readonly effort?: AgyReasoningEffort;
 }
 
 /** Which provider answers, as which model, with which credential. */
@@ -67,6 +76,7 @@ export interface GenerationPlan {
   readonly requiresApiKey: boolean;
   readonly apiKeyLookup: ApiKeyLookup | null;
   readonly codexOptions: CodexOptions | undefined;
+  readonly agyOptions: AgyOptions | undefined;
 }
 
 interface GenerateFlashcardsRequest {
@@ -78,6 +88,11 @@ interface GenerateFlashcardsRequest {
   readonly codex?: {
     readonly reasoningEffort?: CodexReasoningEffort;
     readonly profile?: string;
+  };
+  readonly agy?: {
+    readonly effort?: AgyReasoningEffort;
+    readonly command?: string;
+    readonly configFile?: string;
   };
 }
 
@@ -137,20 +152,51 @@ function resolveCodexOptions(
   };
 }
 
+function resolveAgyOptions(
+  args: GenerationArgs,
+  provider: SupportedProvider,
+  providerSettings: Readonly<ProviderSettings> | undefined,
+): AgyOptions | undefined {
+  const hasAgyEffortFlag = args.agyEffort !== undefined;
+
+  if (provider !== "agy" && hasAgyEffortFlag) {
+    throw new Error('--agy-effort can only be used with provider "agy".');
+  }
+
+  if (provider !== "agy") {
+    return undefined;
+  }
+
+  const agyEffort = normalizeAgyReasoningEffort(
+    hasAgyEffortFlag ? args.agyEffort : providerSettings?.reasoningEffort,
+    hasAgyEffortFlag ? "--agy-effort" : "settings.generation.providers.agy.reasoningEffort",
+  );
+
+  return {
+    ...(agyEffort === undefined ? {} : { effort: agyEffort }),
+  };
+}
+
 export function resolveGenerationPlan(
   args: GenerationArgs,
   generation: Settings["generation"],
   logger: Logger,
 ): GenerationPlan {
-  const provider = optionalProviderArg(args.provider) ?? generation.defaultProvider;
+  const agyConfig = loadAgyConfig();
+  const explicitProvider = optionalProviderArg(args.provider);
+  const defaultProvider =
+    (agyConfig.provider as SupportedProvider | undefined) ?? generation.defaultProvider;
+  const provider = explicitProvider ?? defaultProvider;
   const providerSettings = generation.providers[provider];
   const defaultModel =
-    providerSettings?.defaultModel ??
+    (provider === "agy" && agyConfig.model) ||
+    providerSettings?.defaultModel ||
     generation.providers[generation.defaultProvider]?.defaultModel;
   const model = optionalStringArg(args.model) ?? defaultModel;
   const requiresApiKey = providerRequiresApiKey(provider);
   const apiKeyLookup = requiresApiKey ? readProviderApiKey(provider) : null;
   const codexOptions = resolveCodexOptions(args, provider, providerSettings);
+  const agyOptions = resolveAgyOptions(args, provider, providerSettings);
 
   if (!model) {
     throw new Error(
@@ -171,8 +217,11 @@ export function resolveGenerationPlan(
     );
     logger.debug(`Codex profile: ${codexOptions?.profile ?? "inherited from Codex config"}`);
   }
+  if (provider === "agy") {
+    logger.debug(`Agy reasoning effort: ${agyOptions?.effort ?? "inherited from agy config"}`);
+  }
 
-  return { provider, model, requiresApiKey, apiKeyLookup, codexOptions };
+  return { provider, model, requiresApiKey, apiKeyLookup, codexOptions, agyOptions };
 }
 
 export function logDryRunSummary(
@@ -189,14 +238,16 @@ export function logDryRunSummary(
   const { ui, plan, prompt, sectionCount, outputPath, defaultOutputDir, usedDefaultOutputPath } =
     options;
   const { logger, useColor } = ui;
-  const { provider, model, requiresApiKey, apiKeyLookup, codexOptions } = plan;
+  const { provider, model, requiresApiKey, apiKeyLookup, codexOptions, agyOptions } = plan;
 
   const apiCheckOk = !requiresApiKey || Boolean(apiKeyLookup?.apiKey);
   const apiCheckDetail = requiresApiKey
     ? apiCheckOk
       ? apiKeyLookup!.envVar
       : `missing env var ${apiKeyLookup!.envVar}`
-    : "uses local Codex CLI auth; no PROVIDER_API_KEY required";
+    : provider === "agy"
+      ? "uses local agy CLI; no API key required"
+      : "uses local Codex CLI auth; no PROVIDER_API_KEY required";
   console.log("");
   process.stdout.write(`${formatSectionHeading("Dry Run Summary", useColor)}\n`);
   logger.info(`AI provider: ${colorizeText(provider, "blue", useColor)}`);
@@ -207,6 +258,11 @@ export function logDryRunSummary(
     );
     logger.info(
       `Codex profile: ${colorizeText(codexOptions?.profile ?? "inherited", "blue", useColor)}`,
+    );
+  }
+  if (provider === "agy") {
+    logger.info(
+      `Agy reasoning effort: ${colorizeText(agyOptions?.effort ?? "inherited", "blue", useColor)}`,
     );
   }
   logger.info(
@@ -487,7 +543,7 @@ export async function generateAllCards(options: GenerateAllCardsOptions): Promis
   const { sections, plan, promptContents, ui, deckTitle, outputPath, artifactBaseName, dryRun } =
     options;
   const { logger, progress } = ui;
-  const { apiKeyLookup, codexOptions } = plan;
+  const { apiKeyLookup, codexOptions, agyOptions } = plan;
 
   const generationStart = Date.now();
   const aggregatedCards: Card[] = [];
@@ -497,7 +553,7 @@ export async function generateAllCards(options: GenerateAllCardsOptions): Promis
 
   /* One request for both ways of making it: the heartbeat wraps the call and the
      bare path does not, and the only thing that differed between them was which
-     of the two spelled the arguments out. `apiKey` and `codex` are written only
+     of the two spelled the arguments out. `apiKey`, `codex`, and `agy` are written only
      where there is one, since the provider reads an absent key and an undefined
      one the same way. */
   const baseRequest = {
@@ -506,6 +562,7 @@ export async function generateAllCards(options: GenerateAllCardsOptions): Promis
     prompt: promptContents,
     ...(apiKeyLookup?.apiKey === undefined ? {} : { apiKey: apiKeyLookup.apiKey }),
     ...(codexOptions === undefined ? {} : { codex: codexOptions }),
+    ...(agyOptions === undefined ? {} : { agy: agyOptions }),
   };
 
   for (const [position, section] of sections.entries()) {

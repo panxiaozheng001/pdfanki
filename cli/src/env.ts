@@ -10,7 +10,8 @@ export function getProviderEnvVarName(provider: string): string {
 }
 
 export function providerRequiresApiKey(provider: string): boolean {
-  return provider.trim().toLowerCase() !== "codex";
+  const normalized = provider.trim().toLowerCase();
+  return normalized !== "codex" && normalized !== "agy";
 }
 
 /**

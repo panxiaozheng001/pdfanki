@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 import { isNotFoundError } from "./errors.js";
 import {
+  AGY_REASONING_EFFORTS,
   DEFAULT_EPUB_TITLE_FILTERS,
+  loadAgyConfig,
+  type AgyReasoningEffort,
   type EpubTitleFilter,
   type SupportedProvider as ServerSupportedProvider,
 } from "./pdfankiRuntime.js";
@@ -18,6 +21,7 @@ const PROMPT_NAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const CODEX_PROFILE_PATTERN = /^[A-Za-z0-9_-]+$/;
 export const CODEX_REASONING_EFFORTS = ["low", "medium", "high"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
+export { AGY_REASONING_EFFORTS, type AgyReasoningEffort };
 
 /**
  * Every provider the CLI accepts, in one place: `--provider`'s `choices`, the
@@ -31,6 +35,7 @@ export const SUPPORTED_PROVIDERS = [
   "deepseek",
   "openrouter",
   "codex",
+  "agy",
 ] as const satisfies readonly SupportedProvider[];
 
 /** The three files a workflow can end at, which are also `output.paths`' keys. */
@@ -100,6 +105,10 @@ export const DEFAULT_SETTINGS: Settings = {
       },
       codex: {
         defaultModel: "gpt-5.4",
+        reasoningEffort: "medium",
+      },
+      agy: {
+        defaultModel: "gemini-3.8-flash-medium",
         reasoningEffort: "medium",
       },
     },
@@ -317,8 +326,8 @@ function readProviderSettings(
   };
 
   const effort = normalizedOrDefault(
-    normalizeCodexReasoningEffort,
-    readField(source, "reasoningEffort"),
+    (val, src) => normalizeAgyReasoningEffort(val, src) ?? normalizeCodexReasoningEffort(val, src),
+    readField(source, "reasoningEffort") ?? readField(source, "effort"),
     fallback.reasoningEffort,
   );
   if (effort !== undefined) {
@@ -451,12 +460,20 @@ async function readSettingsFile(path: string): Promise<unknown> {
 export async function loadSettings(): Promise<Settings> {
   const paths = await ensureConfig();
   const parsed = await readSettingsFile(paths.settings);
+  if (parsed === undefined) {
+    return DEFAULT_SETTINGS;
+  }
 
   /* Each field twice where the flat legacy spelling exists, nested first. Both
      shapes have always been read and both keep working. */
   const output = readField(parsed, "output");
   const generation = readField(parsed, "generation");
   const epub = readField(parsed, "epub");
+
+  const providers = readProviders(
+    readField(generation, "providers"),
+    readField(parsed, "providers"),
+  );
 
   return {
     output: {
@@ -475,7 +492,7 @@ export async function loadSettings(): Promise<Settings> {
         readString(generation, "defaultPrompt") ??
         readString(parsed, "defaultPrompt") ??
         DEFAULT_SETTINGS.generation.defaultPrompt,
-      providers: readProviders(readField(generation, "providers"), readField(parsed, "providers")),
+      providers,
     },
     epub: {
       preview: readBoolean(epub, "preview") ?? DEFAULT_SETTINGS.epub.preview,
@@ -523,6 +540,29 @@ export function normalizeCodexReasoningEffort(
   }
 
   throw new Error(`${sourceLabel} must be one of: ${CODEX_REASONING_EFFORTS.join(", ")}.`);
+}
+
+function isAgyReasoningEffort(value: string): value is AgyReasoningEffort {
+  return AGY_REASONING_EFFORTS.some((effort) => effort === value);
+}
+
+export function normalizeAgyReasoningEffort(
+  value: unknown,
+  sourceLabel: string,
+): AgyReasoningEffort | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(`${sourceLabel} must be one of: ${AGY_REASONING_EFFORTS.join(", ")}.`);
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (isAgyReasoningEffort(normalized)) {
+    return normalized;
+  }
+
+  throw new Error(`${sourceLabel} must be one of: ${AGY_REASONING_EFFORTS.join(", ")}.`);
 }
 
 export function normalizeCodexProfile(value: unknown, sourceLabel: string): string | undefined {

@@ -21,6 +21,7 @@ Requirements
 
 - Node.js >= 24
 - Provider API key exported in your shell for API-backed providers: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, or `OPENROUTER_API_KEY`
+- Antigravity (`agy`) provider: locally installed `agy` CLI; calls `agy` subprocess directly and reads model configuration from `agy.config.json` without requiring API keys
 - Optional experimental Codex provider: locally installed official `codex` CLI with an existing login; pdfanki calls `codex exec` and does not read Codex auth files directly
 
 Install (CLI)
@@ -73,6 +74,10 @@ Default `settings.json` shape:
       "codex": {
         "defaultModel": "gpt-5.4",
         "reasoningEffort": "medium"
+      },
+      "agy": {
+        "defaultModel": "gemini-3.8-flash-medium",
+        "effort": "medium"
       }
     }
   },
@@ -85,6 +90,22 @@ Default `settings.json` shape:
   }
 }
 ```
+
+### `agy.config.json` Configuration
+
+When calling AI through Antigravity (`agy`), pdfanki searches upwards for `agy.config.json` starting from the current directory up to the workspace root:
+
+```json
+{
+  "provider": "agy",
+  "model": "gemini-3.8-flash-medium",
+  "effort": "medium",
+  "command": "agy",
+  "timeoutMs": 600000
+}
+```
+
+If `agy.config.json` exists, pdfanki automatically defaults to the `agy` provider and uses the model configured in `agy.config.json` unless explicitly overridden on the command line.
 
 How the CLI works
 
@@ -99,6 +120,9 @@ How the CLI works
   - `pdfanki pdf md book.pdf --provider deepseek --model deepseek-chat`
 - Example: generate markdown from a PDF with OpenRouter
   - `pdfanki pdf md book.pdf --provider openrouter --model z-ai/glm-5`
+- Example: generate markdown through the local Antigravity (`agy`) CLI provider
+  - `pdfanki pdf md book.pdf --provider agy --model gemini-3.8-flash-medium`
+  - (Or simply omit `--provider` if `agy.config.json` is in the workspace)
 - Example: generate markdown through the experimental local Codex CLI provider
   - `pdfanki pdf md book.pdf --provider codex --model gpt-5.4 --codex-reasoning-effort high`
 - Example: extract JSON from an EPUB section range
@@ -127,6 +151,7 @@ How the CLI works
   - `pdfanki pdf json book.pdf --dry-run`
   - `pdfanki pdf md book.pdf --dry-run`
 - Defaults go to the current working directory with filenames derived from the input (`kebab-case`).
+- The `agy` provider invokes the local `agy` process (`agy -p "<prompt>" --model <model> ...`) to perform generation. The model and effort can be configured in `agy.config.json` or overridden via `--model` / `--agy-effort`.
 - The `codex` provider is experimental. It pipes each section prompt into `codex exec --ephemeral --skip-git-repo-check`, captures the final Markdown from stdout, and relies on your existing Codex CLI authentication rather than `OPENAI_API_KEY`.
 - For Codex, `generation.providers.codex.defaultModel` maps to `codex exec --model`, and `generation.providers.codex.reasoningEffort` maps to a per-run `model_reasoning_effort` config override. CLI flags `--model`, `--codex-reasoning-effort`, and `--codex-profile` take precedence over `settings.json` and do not edit `~/.codex/config.toml`.
 - Set `output.path` to change the default output directory for conversion commands.

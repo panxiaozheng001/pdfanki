@@ -45,6 +45,6 @@ for (const name of promptFiles) {
   test(`${name} shows a canonical card as its example`, () => {
     const contents = readFileSync(path.join(PROMPTS_DIR, name), "utf8");
 
-    assert.match(contents, /## <front of card text>\n\n- Key point 1/);
+    assert.match(contents.replace(/\r\n/g, "\n"), /## <front of card text>\n\n- Key point 1/);
   });
 }

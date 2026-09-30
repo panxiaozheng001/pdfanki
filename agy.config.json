@@ -1,0 +1,7 @@
+{
+  "provider": "agy",
+  "model": "gemini-3.8-flash-medium",
+  "effort": "medium",
+  "command": "agy",
+  "timeoutMs": 600000
+}

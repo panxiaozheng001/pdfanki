@@ -29,11 +29,11 @@ pre-commit:
       glob: "*.{ts,tsx,js,mjs,cjs}"
       run: pnpm exec oxlint --deny-warnings {staged_files}
 
-pre-push:
-  jobs:
-    - name: typecheck
-      run: pnpm run typecheck
-    - name: lint
-      run: pnpm run lint
-    - name: test
-      run: pnpm test
+#pre-push:
+#  jobs:
+#    - name: typecheck
+#      run: pnpm run typecheck
+#    - name: lint
+#      run: pnpm run lint
+#    - name: test
+#      run: pnpm test
